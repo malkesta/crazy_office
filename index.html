@@ -1085,9 +1085,25 @@
         sheet.node.remove();
       }
 
+      function isTutorialSheetVisible(sheet) {
+        if (!sheet || sheet.carried || !sheets.includes(sheet)) return false;
+        const sheetRight = sheet.x + sheet.size;
+        const sheetBottom = sheet.y + sheet.size * 1.22;
+        return sheetRight > 0 && sheet.x < width && sheetBottom > 0 && sheet.y < height;
+      }
+
+      function clearTutorialGuide() {
+        if (tutorialSheet) tutorialSheet.node.classList.remove("tutorial-target");
+        tutorialSheet = null;
+        tutorialPath = null;
+        tutorialArrow = null;
+        tutorialLayer.replaceChildren();
+      }
+
       function createTutorial() {
-        if (tutorialDismissed || tutorialSheet || !sheets.length || !folders.length) return;
-        tutorialSheet = sheets[0];
+        if (tutorialDismissed || tutorialSheet || !folders.length) return;
+        tutorialSheet = sheets.find(isTutorialSheetVisible);
+        if (!tutorialSheet) return;
         tutorialSheet.node.classList.add("tutorial-target");
         tutorialStartedAt = performance.now();
         tutorialPath = element("path", {
@@ -1105,17 +1121,16 @@
       }
 
       function dismissTutorial() {
-        if (tutorialSheet) tutorialSheet.node.classList.remove("tutorial-target");
+        clearTutorialGuide();
         tutorialDismissed = true;
-        tutorialSheet = null;
-        tutorialPath = null;
-        tutorialArrow = null;
-        tutorialLayer.replaceChildren();
       }
 
       function updateTutorial(timestamp) {
         if (tutorialDismissed) return;
-        if (!tutorialSheet || !sheets.includes(tutorialSheet)) createTutorial();
+        if (!isTutorialSheetVisible(tutorialSheet)) {
+          clearTutorialGuide();
+          createTutorial();
+        }
         if (!tutorialSheet || !tutorialPath || !tutorialArrow || !folders[activeFolder]) return;
         const sheetX = tutorialSheet.x + tutorialSheet.size * .5;
         const sheetY = tutorialSheet.y + tutorialSheet.size * .55;
