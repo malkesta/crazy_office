@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e9edf1">
+  <title>Секретные досье</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #e9edf1;
+      color: #1c2a38;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    body { touch-action: none; }
+
+    #game {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #20252b;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .sheet {
+      cursor: grab;
+      touch-action: none;
+      filter: drop-shadow(0 0 7px rgb(255 245 201 / 92%)) drop-shadow(0 5px 5px rgb(10 18 27 / 60%));
+    }
+
+    .sheet:active { cursor: grabbing; }
+
+    #game.magnet-active,
+    #game.magnet-active .sheet { cursor: grabbing; }
+
+    .carried-sheet {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 110ms cubic-bezier(.2, .8, .25, 1), opacity 110ms ease-out;
+    }
+
+    .folder-error .folder-back,
+    .folder-error .folder-front {
+      animation: folder-error 680ms cubic-bezier(.18, .75, .25, 1);
+    }
+
+    .folder-error .folder-glow { animation: error-glow 680ms ease-out; }
+
+    .folder-success .folder-back,
+    .folder-success .folder-front {
+      animation: folder-success 760ms cubic-bezier(.18, .75, .25, 1);
+    }
+
+    .folder-success .folder-glow { animation: success-glow 760ms ease-out; }
+
+    @keyframes folder-error {
+      0%, 100% { fill: var(--folder-color); }
+      18%, 70% { fill: #d94c4c; }
+      35%, 55% { fill: #ff7373; }
+    }
+
+    @keyframes error-glow {
+      0% { opacity: 0; fill: #ef4e4e; }
+      22% { opacity: .85; fill: #ef4e4e; }
+      100% { opacity: 0; fill: #ef4e4e; }
+    }
+
+    @keyframes folder-success {
+      0%, 100% { fill: var(--folder-color); }
+      20%, 72% { fill: #25855d; }
+      42% { fill: #55bd81; }
+    }
+
+    @keyframes success-glow {
+      0% { opacity: 0; fill: #56e19c; }
+      25% { opacity: .9; fill: #56e19c; }
+      100% { opacity: 0; fill: #56e19c; }
+    }
+
+    .folder-active .active-marker {
+      opacity: 1;
+      animation: active-marker-pulse 1.35s ease-in-out infinite;
+    }
+    .folder-active .folder-glow { animation: folder-idle-glow 1.65s ease-in-out infinite; }
+    @keyframes folder-idle-glow { 0%, 100% { opacity: .32; } 50% { opacity: .92; } }
+    .tutorial-target { animation: tutorial-target-pulse 1.1s ease-in-out infinite; }
+    .tutorial-arrow { animation: tutorial-arrow-pulse .85s ease-in-out infinite; }
+    @keyframes tutorial-target-pulse { 0%,100% { filter: drop-shadow(0 0 4px #fff1a1); } 50% { filter: drop-shadow(0 0 16px #fff4a8); } }
+    @keyframes tutorial-arrow-pulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+
+    @keyframes active-marker-pulse {
+      0%, 100% { opacity: .68; }
+      50% { opacity: 1; }
+    }
+
+    .burning {
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: burn 420ms ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes burn {
+      0% { opacity: 1; filter: brightness(1); transform: scale(1) rotate(0); }
+      35% { opacity: .9; filter: brightness(1.8) sepia(1); }
+      100% { opacity: 0; filter: brightness(2) sepia(1); transform: scale(.25) rotate(18deg); }
+    }
+
+    .win-screen {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgb(15 28 42 / 68%);
+    }
+
+    .win-screen[hidden] { display: none; }
+
+    .win-card {
+      width: min(100%, 390px);
+      padding: 34px 26px 28px;
+      border: 1px solid rgb(255 255 255 / 70%);
+      border-radius: 24px;
+      background: #f8fafb;
+      box-shadow: 0 24px 70px rgb(8 19 30 / 30%);
+      text-align: center;
+    }
+
+    .win-card h1 {
+      margin: 0 0 10px;
+      color: #176b55;
+      font-size: clamp(28px, 8vw, 40px);
+    }
+
+    .win-card p {
+      margin: 0 0 24px;
+      color: #526272;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .win-card button {
+      min-height: 50px;
+      padding: 0 24px;
+      border: 0;
+      border-radius: 14px;
+      background: #176b55;
+      color: white;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .win-card button:hover { background: #105943; }
+    .win-card button:focus-visible { outline: 3px solid #f0bd47; outline-offset: 3px; }
+
+    .splash {
+      position: fixed;
+      z-index: 20;
+      inset: 0;
+      display: grid;
+      place-items: end center;
+      padding: clamp(20px, 5vw, 60px);
+      background: linear-gradient(180deg, rgb(5 12 22 / 18%), rgb(5 12 22 / 72%)), url("assets/office-splash.png") center / cover;
+    }
+    .splash[hidden] { display: none; }
+    .splash-card { max-width: 510px; text-align: center; color: #fff3d0; text-shadow: 0 3px 12px #101821; }
+    .office-logo { display: inline-grid; margin: 0; transform: rotate(-2deg); color: #fff6d8; font-family: Georgia, serif; font-size: clamp(37px, 7vw, 70px); font-weight: 900; line-height: .78; letter-spacing: .03em; text-shadow: 0 4px 0 #8d402b, 0 8px 18px rgb(0 0 0 / 52%); }
+    .office-logo span { color: #f1bf65; font-family: system-ui, sans-serif; font-size: .36em; font-weight: 1000; letter-spacing: .25em; line-height: 1; text-shadow: 0 2px 0 #6f3429; }
+    .office-logo strong { display: block; font: inherit; }
+    .splash-card p { margin: 9px 0 18px; font-weight: 700; }
+    .splash-card button { border: 2px solid #fff1b6; border-radius: 999px; padding: 14px 30px; background: #d98d3e; color: #fff9e6; font: inherit; font-weight: 900; font-size: 17px; cursor: pointer; box-shadow: 0 8px 24px rgb(0 0 0 / 35%); }
+    .splash-card button:hover { background: #edaa58; }
+
+    .rotate-device { position: fixed; z-index: 50; inset: 0; display: none; place-items: center; padding: 28px; background: #101b27; color: #fff1c9; text-align: center; }
+    .rotate-icon { display: block; margin: 0 auto 18px; font-size: 60px; transform: rotate(90deg); }
+
+    .dialogue-screen { position: fixed; z-index: 45; inset: 0; display: grid; align-items: end; padding: 4vw; background: linear-gradient(180deg, transparent 25%, rgb(6 12 19 / 80%)); }
+    .dialogue-screen[hidden] { display: none; }
+    .dialogue-portrait { position: absolute; bottom: 0; left: 5%; width: min(38vw, 510px); height: min(72vh, 620px); filter: drop-shadow(0 10px 24px rgb(0 0 0 / 55%)); }
+    .dialogue-box { position: relative; z-index: 1; margin-left: min(34vw, 420px); padding: 18px 20px; border: 1px solid #f4d992; border-radius: 18px; background: rgb(19 30 40 / 94%); color: #fff3d6; box-shadow: 0 14px 40px rgb(0 0 0 / 45%); }
+    .dialogue-name { margin: 0 0 7px; color: #f0bd65; font-size: 16px; font-weight: 900; letter-spacing: .8px; }
+    .dialogue-text { min-height: 50px; margin: 0; font-size: clamp(15px, 2vw, 20px); line-height: 1.4; }
+    .dialogue-next, .dialogue-choice { margin-top: 14px; border: 0; border-radius: 10px; padding: 10px 14px; background: #d98d3e; color: #fff8e6; font: inherit; font-weight: 800; cursor: pointer; }
+    .dialogue-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+    .dialogue-choice { margin: 0; background: #4e7898; text-align: left; }
+    .dialogue-choice:last-child { background: #76565a; }
+    @media (orientation: landscape) and (max-height: 560px) { .dialogue-screen { padding: 12px 4vw; } .dialogue-portrait { width: 32vw; height: 82vh; left: 3%; } .dialogue-box { margin-left: 30vw; padding: 12px 14px; } .dialogue-text { min-height: 38px; font-size: 14px; } .dialogue-next, .dialogue-choice { margin-top: 8px; padding: 8px 10px; font-size: 12px; } }
+
+    @media (orientation: portrait) and (max-width: 900px) {
+      .rotate-device { display: grid; }
+    }
+    @media (orientation: landscape) and (max-height: 560px) {
+      .splash { padding: 18px; }
+      .office-logo { font-size: clamp(31px, 6vw, 52px); }
+      .splash-card p { margin: 5px 0 10px; font-size: 13px; }
+      .splash-card button { padding: 10px 23px; font-size: 14px; }
+      .facts-screen { padding: 12px; }
+      .facts-head { margin-bottom: 10px; }
+      .facts-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .employee-description { display: none; }
+      .employee-file { padding: 8px; }
+    }
+
+    .facts-screen {
+      position: fixed;
+      inset: 0;
+      overflow: auto;
+      padding: 22px;
+      background: linear-gradient(rgb(10 20 30 / 88%), rgb(10 18 27 / 96%)), url("assets/office-background-v2.png") center / cover fixed;
+      color: #fff4d6;
+    }
+
+    .facts-screen[hidden] { display: none; }
+    .facts-wrap { width: min(1400px, 100%); margin: 0 auto; }
+    .facts-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 0 18px; }
+    .facts-head h1 { margin: 0; font-size: clamp(27px, 5vw, 44px); }
+    .facts-head p { margin: 5px 0 0; color: #c9d5dc; }
+    .facts-back, .fact-button {
+      border: 0; border-radius: 12px; padding: 11px 14px; font: inherit; font-weight: 800; cursor: pointer;
+    }
+    .facts-back { background: #e5b55a; color: #1b2630; white-space: nowrap; }
+    .office-fate { min-width: 190px; padding: 15px 24px; background: linear-gradient(135deg, #2fa96f, #17714d); color: #f2fff6; font-size: 17px; box-shadow: 0 8px 18px rgb(8 71 45 / 42%); }
+    .office-fate:hover { background: linear-gradient(135deg, #44be83, #20855c); }
+    .fate-screen { position: fixed; z-index: 42; inset: 0; display: grid; place-items: center; padding: 24px; background: linear-gradient(rgb(8 17 27 / 85%), rgb(8 17 27 / 96%)), url("assets/office-background-v2.png") center / cover; color: #fff2d1; }
+    .fate-screen[hidden] { display: none; }
+    .fate-card { width: min(620px, 100%); padding: 28px; border: 1px solid #f1d48b; border-radius: 22px; background: rgb(18 30 40 / 93%); text-align: center; box-shadow: 0 20px 55px rgb(0 0 0 / 45%); }
+    .fate-card h1 { margin: 0 0 10px; }
+    .fate-card p { color: #d9e3e5; line-height: 1.5; }
+    .fate-employees { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 20px 0; text-align: left; }
+    .fate-employee { min-height: 94px; padding: 10px; border: 1px solid rgb(255 236 185 / 26%); border-radius: 12px; background: rgb(4 12 18 / 44%); }
+    .fate-employee h2 { margin: 0 0 7px; font-size: 13px; }
+    .fate-love { margin: 0; color: #aebbc0; font-size: 12px; }
+    .fate-love strong { display: block; margin-top: 4px; color: #f0444b; font-size: 17px; letter-spacing: 1px; }
+    .fate-employee.locked { display: grid; place-content: center; text-align: center; border-style: dashed; color: #98a5ab; }
+    .fate-employee.locked h2 { margin: 0; }
+    .facts-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .employee-file { padding: 11px; border: 1px solid rgb(255 239 192 / 35%); border-radius: 16px; background: linear-gradient(135deg, rgb(50 37 30 / 93%), rgb(24 35 45 / 94%)); box-shadow: 0 12px 28px rgb(0 0 0 / 35%); min-width: 0; }
+    .employee-file.mystery-file { display: grid; place-content: center; min-height: 170px; text-align: center; background: repeating-linear-gradient(-45deg, rgb(26 32 40 / 95%), rgb(26 32 40 / 95%) 9px, rgb(36 44 52 / 95%) 9px, rgb(36 44 52 / 95%) 18px); border-style: dashed; }
+    .mystery-mark { font-size: 42px; line-height: 1; color: #f2c365; text-shadow: 0 0 16px rgb(242 195 101 / 60%); }
+    .mystery-file h2 { margin: 7px 0 4px; font-size: 16px; }
+    .mystery-file p { margin: 0; color: #b9c6cb; font-size: 12px; line-height: 1.35; }
+    .employee-file h2 { margin: 0; font-size: 17px; }
+    .employee-intro { display: grid; grid-template-columns: 62px 1fr; gap: 8px; align-items: center; margin: 0 0 8px; }
+    .facts-portrait { width: 62px; height: 62px; border-radius: 12px; overflow: hidden; background: #e8c982; border: 2px solid #fff1c7; box-shadow: 0 4px 16px rgb(0 0 0 / 35%); }
+    .employee-description { margin: 3px 0 0; color: #d5e0e2; line-height: 1.25; font-size: 12px; }
+    .employee-balance { margin: 5px 0 9px; color: #f3c86b; font-weight: 800; font-size: 12px; }
+    .relation-hearts { margin-left: 3px; font-size: 15px; letter-spacing: 1px; vertical-align: -1px; }
+    .relation-hearts.positive { color: #f0444b; text-shadow: 0 1px 5px rgb(240 68 75 / 48%); }
+    .relation-hearts.negative { color: #b8c2c4; }
+    .recognition-label { margin: 0 0 3px; color: #c6d8dc; font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+    .points-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 7px; }
+    .points-track { height: 8px; overflow: hidden; border-radius: 999px; background: #40505a; }
+    .points-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #f2ad55, #ffe08a); }
+    .points-number { color: #fff2ce; font-size: 12px; white-space: nowrap; }
+    .fact-list { display: grid; gap: 7px; }
+    .fact { display: flex; align-items: center; gap: 7px; min-height: 35px; padding: 6px 7px; border-radius: 9px; background: rgb(7 15 23 / 46%); color: #f9edd3; line-height: 1.22; font-size: 12px; }
+    .fact.locked { color: #9dabaf; }
+    .fact-lock { flex: 0 0 24px; text-align: center; }
+    .fact-button { margin-left: auto; background: #5a8fc1; color: white; font-size: 12px; }
+    .fact-button:disabled { background: #3d4c57; color: #87939b; cursor: not-allowed; }
+    @media (max-width: 980px) { .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 700px) { .facts-grid { grid-template-columns: 1fr; } .facts-head { align-items: flex-start; flex-direction: column; } .fate-employees { gap: 5px; } .fate-employee { min-height: 76px; padding: 7px; } .fate-employee h2 { font-size: 10px; } .fate-love { font-size: 10px; } .fate-love strong { font-size: 13px; } }
+  </style>
+</head>
+<body>
+  <svg id="game" role="application" aria-label="Игра «Секретные досье»" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="desk-lines" width="54" height="54" patternUnits="userSpaceOnUse">
+        <path d="M0 53.5H54" stroke="#dce2e7" stroke-width="1"/>
+      </pattern>
+      <filter id="folder-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="7" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="screen-gradient" x2="0" y2="1">
+        <stop offset="0" stop-color="#334b61"/>
+        <stop offset="1" stop-color="#172b3d"/>
+      </linearGradient>
+    </defs>
+    <image id="office-background" href="assets/office-background-v2.png" preserveAspectRatio="xMidYMid slice"/>
+    <rect id="background" fill="#18212a" opacity=".18"/>
+    <rect id="desk-pattern" fill="url(#desk-lines)" opacity=".08"/>
+    <g id="hud"></g>
+    <g id="computer"></g>
+    <g id="folders"></g>
+    <g id="sheets"></g>
+    <g id="tutorial" pointer-events="none"></g>
+    <g id="drag-layer"></g>
+  </svg>
+  <audio id="game-music" src="assets/deadpan-noir-shuffle.mp3" loop preload="auto"></audio>
+  <audio id="novel-music" src="assets/small-rests.mp3" loop preload="auto"></audio>
+  <section id="splash" class="splash">
+    <div class="splash-card">
+      <h1 class="office-logo"><span>ОФИСНОЕ</span><strong>ШАПИТО</strong></h1>
+      <p>Офис трещит по швам. Разберите завалы — и узнайте, кто здесь за что отвечает.</p>
+      <button id="start-mission" type="button">Начать смену</button>
+    </div>
+  </section>
+  <section class="rotate-device" aria-live="polite">
+    <div><span class="rotate-icon">▯</span><strong>Поверните устройство горизонтально</strong><p>Игра создана для широкого экрана.</p></div>
+  </section>
+  <section id="dialogue-screen" class="dialogue-screen" hidden aria-live="polite">
+    <svg id="dialogue-portrait" class="dialogue-portrait" preserveAspectRatio="xMidYMax meet" aria-hidden="true"></svg>
+    <div class="dialogue-box">
+      <p id="dialogue-name" class="dialogue-name"></p>
+      <p id="dialogue-text" class="dialogue-text"></p>
+      <div id="dialogue-actions"></div>
+    </div>
+  </section>
+  <div id="win-screen" class="win-screen" hidden>
+    <section class="win-card" role="dialog" aria-modal="true" aria-labelledby="win-title">
+      <svg viewBox="0 0 120 100" width="100" height="84" aria-hidden="true">
+        <path d="M60 5 73 34l31 4-23 21 6 31-27-16-27 16 6-31L16 38l31-4z" fill="#f0bd47"/>
+        <path d="m44 53 11 11 23-25" fill="none" stroke="#176b55" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h1 id="win-title">Дело закрыто!</h1>
+      <p>Все секретные листы рассортированы.<br>Отличная работа, агент!</p>
+      <button id="restart" type="button">Играть снова</button>
+    </section>
+  </div>
+  <div id="facts-screen" class="facts-screen" hidden>
+    <main class="facts-wrap">
+      <header class="facts-head">
+        <div><h1>Дело закрыто: личные досье</h1><p>Открывайте факты по порядку: каждый следующий стоит на 5 очков дороже, но не более 30.</p></div>
+        <div><button id="office-fate" class="facts-back office-fate" type="button">Судьба офиса</button> <button id="back-to-computer" class="facts-back" type="button">К компьютеру</button></div>
+      </header>
+      <section id="facts-grid" class="facts-grid" aria-label="Досье сотрудников"></section>
+    </main>
+  </div>
+  <section id="fate-screen" class="fate-screen" hidden>
+    <div class="fate-card"><h1>Судьба офиса</h1><p id="fate-text"></p><div id="fate-employees" class="fate-employees" aria-label="Отношение сотрудников"></div><button id="back-to-dossiers" class="facts-back" type="button">К досье</button></div>
+  </section>
+  <script>
+    (() => {
+      "use strict";
+
+      const svg = document.querySelector("#game");
+      const hud = document.querySelector("#hud");
+      const computer = document.querySelector("#computer");
+      const folderLayer = document.querySelector("#folders");
+      const sheetLayer = document.querySelector("#sheets");
+      const tutorialLayer = document.querySelector("#tutorial");
+      const dragLayer = document.querySelector("#drag-layer");
+      const winScreen = document.querySelector("#win-screen");
+      const restartButton = document.querySelector("#restart");
+      const factsScreen = document.querySelector("#facts-screen");
+      const factsGrid = document.querySelector("#facts-grid");
+      const backToComputer = document.querySelector("#back-to-computer");
+      const officeFate = document.querySelector("#office-fate");
+      const fateScreen = document.querySelector("#fate-screen");
+      const fateText = document.querySelector("#fate-text");
+      const fateEmployees = document.querySelector("#fate-employees");
+      const backToDossiers = document.querySelector("#back-to-dossiers");
+      const gameMusic = document.querySelector("#game-music");
+      const novelMusic = document.querySelector("#novel-music");
+      const splash = document.querySelector("#splash");
+      const startMission = document.querySelector("#start-mission");
+      const dialogueScreen = document.querySelector("#dialogue-screen");
+      const dialoguePortrait = document.querySelector("#dialogue-portrait");
+      const dialogueName = document.querySelector("#dialogue-name");
+      const dialogueText = document.querySelector("#dialogue-text");
+      const dialogueActions = document.querySelector("#dialogue-actions");
+      const NS = "http://www.w3.org/2000/svg";
+      const folders = [];
+      const sheets = [];
+      const TARGET_SCORE = 200;
+      const MAX_SHEETS = 14;
+      const SPAWN_INTERVAL = 1.65;
+
+      let width = 0;
+      let height = 0;
+      let unit = 0;
+      let score = 0;
+      const employeeScores = [0, 0, 0, 0];
+      const employeeEarned = [0, 0, 0, 0];
+      const employeeRunScores = [0, 0, 0, 0];
+      const EMPLOYEE_TARGET = TARGET_SCORE / 4;
+      const factsUnlocked = [0, 0, 0, 0];
+      const affection = [0, 0, 0, 0];
+      const factsAtLastReturn = [0, 0, 0, 0];
+      const dialogueMilestones = [2, 6, 10, 14, 18];
+      const dialogueTriggered = [new Set(), new Set(), new Set(), new Set()];
+      const shownDialogueEmployees = new Set();
+      let activeDialogue = null;
+      const employees = [
+        { name: "Лена — секретарь", description: "Королева маникюра и негласный диспетчер всех офисных катастроф.", facts: [
+          "90% времени красит ногти, а оставшиеся 10% — спасает фирму.",
+          "80% телефонного счёта компании — разговоры с подругой о маникюре.",
+          "Помнит все пароли, но выдаёт их только в обмен на шоколадку.",
+          "Её календарь забит «важными встречами», которые на самом деле записи в салон.",
+          "В критической ситуации её лак для ногтей работает как клей, маркер и аварийный ремонт.",
+          "У Лены было три мужа, и несколько из них умерло при весьма неудобных обстоятельствах.",
+          "Своих подруг она любит так сильно, что их голосовые сообщения слушает на двойной скорости.",
+          "Лена — страстная шопоголичка, но с деньгами у неё подозрительно всё хорошо.",
+          "Хранит в ящике стола запасные колготки, зарядки и план эвакуации из любой неловкой беседы.",
+          "Её подпись на открытках клиентам выглядит дороже, чем весь бюджет отдела.",
+          "Может определить настроение шефа по тому, как он закрывает холодильник.",
+          "Однажды оформила возврат за чужую ошибку так убедительно, что ей прислали благодарность.",
+          "Никто не знает, когда она работает, но без неё работа останавливается к обеду.",
+          "На столе держит фикус, который пережил четыре реорганизации и всех её мужей.",
+          "Умеет молчать в переговорной так выразительно, что люди сами начинают признавать ошибки.",
+          "Считает, что идеальный деловой костюм должен подходить к цвету лака.",
+          "Ведёт список должников, но отдаёт его только тем, кто принёс кофе.",
+          "Каждый понедельник обещает уйти из компании и каждый вторник спасает её от краха.",
+          "Её любимое слово — «срочно», хотя произносит она его только в исключительных случаях.",
+          "В её ящике есть папка «на всякий случай», а в ней — ещё шесть папок «на всякий случай»."
+        ] },
+        { name: "Александр Михайлович — шеф", description: "Главный специалист по экономии чужих ресурсов и объяснению необъяснимого.", facts: [
+          "Доедает еду сотрудников из холодильника и сваливает всё на самого занятого сотрудника.",
+          "Ведёт таблицу экономии, где отдельной строкой считает каждый лист туалетной бумаги.",
+          "Обещает премии так уверенно, будто бюджет уже существует.",
+          "Меняет приоритеты после каждого бизнес-подкаста, который слушает по дороге в офис.",
+          "На совещаниях говорит «оптимизируем», когда не знает, что делать дальше.",
+          "На самом деле он не имеет отношения к компании и просто однажды сел в свободное кресло шефа.",
+          "Настоящий босс сбежал, а этот человек стал ставить поддельные подписи — и никто не возражал, потому что работа шла.",
+          "Его решения принимают по привычке: они достаточно уверенно сказаны и никому не мешают работать.",
+          "Хранит на столе пустую папку «Стратегия», чтобы люди не задавали лишних вопросов.",
+          "Любит фразу «вернёмся к цифрам», хотя цифры обычно забывает дома.",
+          "Однажды сократил расходы на скрепки и назвал это антикризисной программой.",
+          "Секрет его авторитета — дорогая ручка, которую он нашёл в лифте.",
+          "Подписывает документы размашисто, потому что не уверен, как его фамилия пишется полностью.",
+          "Боится настоящих директоров больше, чем проверок и бухгалтерии вместе взятых.",
+          "Утром репетирует серьёзное лицо перед выключенным монитором.",
+          "Каждую чужую идею называет «именно тем, о чём я думал».",
+          "Считает, что кофе в офисе — это актив, а сотрудники — статья оптимизации.",
+          "Его визитка напечатана с ошибкой, но он говорит, что это элемент бренда.",
+          "В кризисной папке у него лежит только купон на скидку и салфетка.",
+          "На вопрос «кто вас назначил?» он всегда отвечает: «рынок»."
+        ] },
+        { name: "Игорь — самый занятый", description: "Тихий герой бэк-офиса: все дедлайны почему-то находят именно его.", facts: [
+          "Больше всего боится увольнения, хотя оно было бы лучшим решением для его физического и ментального здоровья.",
+          "Ворует ручки компании и перепродаёт их, но зарабатывает слишком мало даже на кофе.",
+          "Знает, где лежит каждый документ, потому что сам его когда-то создавал, правил и печатал.",
+          "Ставит в календарь напоминание «подышать» и почти всегда переносит его на завтра.",
+          "Однажды написал себе служебную записку: «не соглашаться на ещё одну срочную задачу».",
+          "Игорь — сотрудник месяца уже одиннадцатый месяц подряд, но никто не вручал ему эту награду.",
+          "Девушкам он почему-то не нравится; Игорь думает, что дело в деньгах, но дело совсем не в деньгах.",
+          "Его рабочий стол выглядит пустым только потому, что все бумаги уже открыты в двадцати вкладках.",
+          "Пьёт остывший кофе, потому что горячий всегда достаётся кому-то важнее.",
+          "Может починить принтер, но каждый раз делает вид, что не умеет.",
+          "Заявка на его отпуск лежит на согласовании с 2019 года.",
+          "У него есть шаблон письма «взял в работу», который спасал его чаще, чем сон.",
+          "В тайном блокноте рисует планы открыть киоск с канцелярией и никогда не видеть отчёты.",
+          "Знает все горячие клавиши, кроме той, которая выключает рабочий чат.",
+          "Коллеги зовут его «Игорёк, выручай» даже в лифте.",
+          "Однажды ответил на письмо во сне — и это был самый быстрый ответ отдела.",
+          "Его личный рекорд: семь срочных задач, начатых одновременно и законченных раньше срока.",
+          "Прячет в рюкзаке энергетический батончик на случай внепланового совещания.",
+          "Мечтает, чтобы его хотя бы раз спросили: «Игорь, тебе помочь?»",
+          "На его столе есть наклейка «это не моя задача», но она приклеена к чужому монитору."
+        ] },
+        { name: "Николай — охранник", description: "Усталый хранитель ключей, слухов и последней работающей розетки.", facts: [
+          "Знает про ручки Игоря, но ему совершенно наплевать.",
+          "Держит ключи от всех комнат и иногда прячется в серверной ради тишины.",
+          "Все слухи компании доходят до него раньше, чем до руководства.",
+          "Настроил автомат с напитками так, чтобы на ночной смене получать чай чуть крепче обычного.",
+          "Помнит лица всех курьеров, но не помнит, когда в последний раз нормально выспался.",
+          "Верит в НЛО, потому что его действительно похищали — просто ему никто не верит.",
+          "Описывает пришельцев так подробно, что бухгалтерия перестала спрашивать про ночные смены.",
+          "Ведёт журнал странных огней над парковкой и называет его «служебной документацией».",
+          "Однажды пропустил себя через турникет по гостевому пропуску и решил, что это знак.",
+          "Его фонарик пережил больше чрезвычайных ситуаций, чем офисный генератор.",
+          "Уверен, что камера в коридоре моргает ему в ответ.",
+          "Знает, какой сотрудник приходит раньше всех, но это знание никому не нужно.",
+          "В ночной тишине слушает радио с помехами и считает это переговорами с космосом.",
+          "Прячет печенье в будке охраны от шефа и почти никогда не делится.",
+          "Говорит, что может узнать инопланетянина по обуви, но пока проверяет только курьеров.",
+          "Его любимая смена — та, в которой никто не просит открыть склад.",
+          "Считает, что у компании есть призраки, но призраки хотя бы не опаздывают.",
+          "После похищения научился спать с одним открытым глазом и обеими закрытыми мыслями.",
+          "Никогда не увольняется: боится, что пришельцы будут искать его по старому месту работы.",
+          "На всякий случай носит в кармане фонарик, свисток и записку «вернусь через световой год»."
+        ] }
+      ];
+      const dialogueLines = [
+        ["Ты новенький, да? Отлично. Тогда ты ещё не знаешь, почему моя подруга перестала звонить.", "Один из бывших мужей слишком много с ней общался. Теперь он, к счастью, не общается ни с кем.", "Не смотри так. Я просто предпочитаю, чтобы предательство было аккуратно оформлено.", "Кстати, на кредитную карту организации отлично ложится кашемир. Это тоже рабочая необходимость.", "Ты ведь не станешь судить меня за маленькие способы пережить этот офис?", "Иногда я думаю, что дружба — это когда подруга не трогает твоих мужей. Хотя бы живых.", "Шеф не заметит счёт за платье. Он даже свой кабинет не замечает.", "Скажи честно: ты на моей стороне?"],
+        ["Не нервничай. Полиция приходит сюда не по нашу душу. Наверное.", "Они ищут какого-то настоящего директора. Забавно, правда?", "Я всего лишь человек, который умеет говорить уверенно и ставить подпись под углом.", "Компания работает, зарплаты иногда приходят — значит, система жизнеспособна.", "Если кто-то спросит, скажи, что я был на стратегической встрече. Очень стратегической.", "У настоящего босса, говорят, были документы. У меня есть харизма.", "Полиция любит бумажки, а я люблю, когда их не находят.", "Ты ведь не станешь задавать лишних вопросов?"],
+        ["Ты тоже думаешь, что мне пора уходить? Все так думают, кроме меня.", "Я почти написал заявление. Потом пришло письмо с темой «срочно на пять минут».", "Девушкам я не нравлюсь. Наверное, из-за денег. Хотя денег у меня тоже нет.", "Знаешь, иногда страшнее всего открыть дверь, даже если за ней выход.", "Если я уйду, кто будет помнить пароль от принтера?", "Я хочу уйти. Очень. Но хочу, чтобы кто-то сказал, что мир не рухнет.", "Сегодня я закончил семь задач. Восьмая появилась, пока я это говорил.", "Как думаешь, мне правда можно выбрать себя?"],
+        ["Опять в коридоре свет мигал. Это либо проводка, либо они.", "Они забрали меня на три часа. Вернули с головной болью и идеей не спорить с космосом.", "Никто не верит. Даже когда я показываю им идеальную схему тарелки на парковке.", "Ты, кажется, умеешь слушать. Это редкость в этой компании.", "Я не боюсь НЛО. Я боюсь, что они вернутся и попросят отчёт о наших расходах.", "Если увидишь зелёный свет за окном — не маши. Один раз уже помахал.", "Я просто хочу, чтобы хоть кто-то сказал: «да, это могло случиться».", "Ты мне веришь?"
+        ]
+      ];
+      const igorPensFact = "Ворует ручки компании и перепродаёт их, но зарабатывает слишком мало даже на кофе.";
+      const guardPensFact = "Знает про ручки Игоря, но ему совершенно наплевать.";
+
+      function shuffleFacts() {
+        employees.forEach(employee => {
+          for (let index = employee.facts.length - 1; index > 0; index -= 1) {
+            const swap = Math.floor(Math.random() * (index + 1));
+            [employee.facts[index], employee.facts[swap]] = [employee.facts[swap], employee.facts[index]];
+          }
+        });
+      }
+      shuffleFacts();
+
+      function isFactAvailable(employeeIndex, factIndex) {
+        const fact = employees[employeeIndex].facts[factIndex];
+        if (fact !== guardPensFact) return true;
+        const penIndex = employees[2].facts.indexOf(igorPensFact);
+        return factsUnlocked[2] > penIndex;
+      }
+      let activeFolder = 0;
+      let nextFolderChange = randomBetween(5, 15);
+      let spawnElapsed = 0;
+      let previousFrame = 0;
+      let animationFrame = 0;
+      let state = "splash";
+      let carriedSheets = [];
+      let draggedPointerId = null;
+      let magnet = null;
+      let magnetX = 0;
+      let magnetY = 0;
+      let folderLocked = false;
+      let audioContext = null;
+      let lastRustleAt = 0;
+      let tutorialDismissed = false;
+      let tutorialSheet = null;
+      let tutorialPath = null;
+      let tutorialArrow = null;
+      let tutorialStartedAt = 0;
+      let musicFadeFrame = 0;
+
+      function randomBetween(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function element(name, attributes = {}) {
+        const node = document.createElementNS(NS, name);
+        for (const [key, value] of Object.entries(attributes)) {
+          node.setAttribute(key, value);
+        }
+        return node;
+      }
+
+      function startAudio() {
+        gameMusic.volume = .1;
+        if (gameMusic.paused) gameMusic.play().catch(() => {});
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        if (!audioContext) audioContext = new AudioContextClass();
+        if (audioContext.state === "suspended") audioContext.resume();
+        return audioContext;
+      }
+
+      function fadeNovelMusic(targetVolume, duration = 500, onComplete) {
+        window.cancelAnimationFrame(musicFadeFrame);
+        const startVolume = novelMusic.volume;
+        const startedAt = performance.now();
+        const tick = now => {
+          const progress = Math.min((now - startedAt) / duration, 1);
+          novelMusic.volume = startVolume + (targetVolume - startVolume) * progress;
+          if (progress < 1) {
+            musicFadeFrame = window.requestAnimationFrame(tick);
+          } else {
+            musicFadeFrame = 0;
+            if (onComplete) onComplete();
+          }
+        };
+        musicFadeFrame = window.requestAnimationFrame(tick);
+      }
+
+      function requestLandscape() {
+        if (screen.orientation?.lock) screen.orientation.lock("landscape").catch(() => {});
+      }
+
+      function enterFullscreen() {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+
+      function playRustle() {
+        const context = startAudio();
+        if (!context || performance.now() - lastRustleAt < 110) return;
+        lastRustleAt = performance.now();
+        const duration = .09;
+        const buffer = context.createBuffer(1, Math.floor(context.sampleRate * duration), context.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < data.length; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+        const noise = context.createBufferSource();
+        const filter = context.createBiquadFilter();
+        const gain = context.createGain();
+        noise.buffer = buffer;
+        filter.type = "bandpass";
+        filter.frequency.value = 1450;
+        filter.Q.value = .75;
+        gain.gain.setValueAtTime(.045, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + duration);
+        noise.connect(filter).connect(gain).connect(context.destination);
+        noise.start();
+      }
+
+      function playResultSound(successful) {
+        const context = startAudio();
+        if (!context) return;
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = successful ? "sine" : "triangle";
+        oscillator.frequency.setValueAtTime(successful ? 420 : 170, now);
+        oscillator.frequency.exponentialRampToValueAtTime(successful ? 720 : 78, now + (successful ? .18 : .24));
+        gain.gain.setValueAtTime(.001, now);
+        gain.gain.exponentialRampToValueAtTime(successful ? .12 : .1, now + .025);
+        gain.gain.exponentialRampToValueAtTime(.001, now + (successful ? .24 : .28));
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + (successful ? .25 : .3));
+      }
+
+      function svgPoint(event) {
+        const point = svg.createSVGPoint();
+        point.x = event.clientX;
+        point.y = event.clientY;
+        return point.matrixTransform(svg.getScreenCTM().inverse());
+      }
+
+      function calculateLayout() {
+        const bounds = svg.getBoundingClientRect();
+        width = bounds.width;
+        height = bounds.height;
+        if (!width || !height) return;
+        unit = Math.min(width, height) * 0.12;
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        const officeBackground = document.querySelector("#office-background");
+        officeBackground.setAttribute("width", width);
+        officeBackground.setAttribute("height", height);
+        document.querySelector("#background").setAttribute("width", width);
+        document.querySelector("#background").setAttribute("height", height);
+        document.querySelector("#desk-pattern").setAttribute("width", width);
+        document.querySelector("#desk-pattern").setAttribute("height", height);
+
+        renderHud();
+        renderComputer();
+        renderFolders();
+        for (const sheet of sheets) {
+          sheet.size = unit * 1.38;
+          sheet.x = Math.min(width - sheet.size, Math.max(0, sheet.x));
+          sheet.y = Math.min(height - sheet.size * 1.22, Math.max(0, sheet.y));
+          positionSheet(sheet);
+        }
+      }
+
+      function renderHud() {
+        hud.replaceChildren();
+        const title = element("text", {
+          x: width * 0.045, y: height * 0.07, fill: "#f7e9c5",
+          "font-size": unit * 0.3, "font-weight": "800", "letter-spacing": "1.6",
+          stroke: "#1c242c", "stroke-width": unit * .025, "paint-order": "stroke"
+        });
+        title.textContent = "РАЗБОР ЗАВАЛОВ";
+        hud.append(title);
+
+        const scoreWidth = Math.min(width * .38, unit * 4.25);
+        const scoreHeight = unit * .58;
+        const scoreX = width * .04;
+        const scoreY = height * .095;
+        hud.append(element("rect", {
+          x: scoreX, y: scoreY, width: scoreWidth, height: scoreHeight + unit * .92, rx: unit * .12,
+          fill: "#14202a", "fill-opacity": ".88", stroke: "#b9a77d", "stroke-width": unit * .025
+        }));
+        const scoreLabel = element("text", {
+          x: scoreX + unit * .16, y: scoreY + scoreHeight * .3,
+          fill: "#d7c89d", "font-size": unit * 0.17,
+          "font-weight": "700", "letter-spacing": "1"
+        });
+        scoreLabel.textContent = "ОБЩИЙ ПРОГРЕСС";
+        const scoreValue = element("text", {
+          id: "score-value", x: scoreX + unit * .16,
+          y: scoreY + scoreHeight * .75,
+          fill: "#fff6d8", "font-size": unit * .29, "font-weight": "800"
+        });
+        scoreValue.textContent = `${score} / ${TARGET_SCORE}`;
+        const progressX = scoreX + unit * 1.5;
+        const progressW = scoreWidth - unit * 1.68;
+        const progressY = scoreY + scoreHeight * .34;
+        hud.append(scoreLabel, scoreValue,
+          element("rect", { x: progressX, y: progressY, width: progressW, height: scoreHeight * .32, rx: unit * .08, fill: "#40505a" }),
+          element("rect", { id: "progress-fill", x: progressX, y: progressY, width: progressW * Math.min(score / TARGET_SCORE, 1), height: scoreHeight * .32, rx: unit * .08, fill: "#66cd91" })
+        );
+        const employees = ["ЛЕНА", "АЛЕКСАНДР М.", "ИГОРЬ", "НИКОЛАЙ"];
+        const barColors = ["#f39cad", "#d5a04d", "#8ac77f", "#77a8da"];
+        employees.forEach((name, index) => {
+          const y = scoreY + scoreHeight + unit * (.16 + index * .2);
+          hud.append(
+            element("text", { id: `employee-score-${index}`, x: scoreX + unit * .16, y: y + unit * .105, fill: "#f6e7c1", "font-size": unit * .115, "font-weight": "800", "letter-spacing": ".5" }),
+            element("rect", { x: scoreX + unit * .92, y, width: scoreWidth - unit * 1.1, height: unit * .11, rx: unit * .04, fill: "#40505a" }),
+            element("rect", { id: `employee-progress-${index}`, x: scoreX + unit * .92, y, width: (scoreWidth - unit * 1.1) * Math.min(employeeRunScores[index] / EMPLOYEE_TARGET, 1), height: unit * .11, rx: unit * .04, fill: barColors[index] })
+          );
+          document.querySelector(`#employee-score-${index}`).textContent = `${name}  ${employeeRunScores[index]} / ${EMPLOYEE_TARGET}`;
+        });
+
+      }
+
+      function renderComputer() {
+        computer.replaceChildren();
+        return;
+        const cx = width / 2;
+        const cy = height * 0.32;
+        const w = unit * 2.15;
+        const h = unit * 1.55;
+        const label = element("text", {
+          x: cx, y: cy - h * 0.77, "text-anchor": "middle",
+          fill: "#718090", "font-size": unit * 0.22, "font-weight": "700",
+          "letter-spacing": "1"
+        });
+        label.textContent = "АРХИВНЫЙ КОМПЬЮТЕР";
+        computer.append(label);
+        computer.append(
+          element("rect", {
+            x: cx - w / 2, y: cy - h / 2, width: w, height: h * 0.77,
+            rx: unit * 0.13, fill: "#25394b", stroke: "#172b3d", "stroke-width": unit * 0.07
+          }),
+          element("rect", {
+            x: cx - w * 0.43, y: cy - h * 0.39, width: w * 0.86, height: h * 0.58,
+            rx: unit * 0.06, fill: "url(#screen-gradient)"
+          }),
+          element("path", {
+            d: `M${cx - w * 0.09} ${cy + h * 0.1}h${w * 0.18}l${w * 0.07} ${h * 0.24}h-${w * 0.32}z`,
+            fill: "#718090"
+          }),
+          element("path", {
+            d: `M${cx - w * 0.29} ${cy + h * 0.36}h${w * 0.58}l${w * 0.1} ${h * 0.1}h-${w * 0.78}z`,
+            fill: "#9aa6b1"
+          }),
+          element("circle", {
+            cx: cx + w * 0.38, cy: cy + h * 0.28, r: unit * 0.035, fill: "#79d3a9"
+          })
+        );
+      }
+
+      function folderPosition(index) {
+        if (width >= unit * 8.5) {
+          return { x: width * (0.125 + index * 0.25), y: height - unit * 1.2 };
+        }
+        const column = index % 2;
+        const row = Math.floor(index / 2);
+        return {
+          x: width * (column === 0 ? 0.28 : 0.72),
+          y: height - unit * (2.22 - row * 1.25)
+        };
+      }
+
+      function renderFolders() {
+        folderLayer.replaceChildren();
+        folders.length = 0;
+        const folderW = unit * 2.05;
+        const folderH = unit * 1.36;
+        const colors = ["#8a6a52", "#7a6550", "#69765b", "#596d7a"];
+        for (let i = 0; i < 4; i += 1) {
+          const { x, y } = folderPosition(i);
+          const group = element("g", { "data-folder": i, style: `--folder-color: ${colors[i]}` });
+          const glow = element("ellipse", {
+            cx: x, cy: y + folderH * 0.18, rx: folderW * 0.67, ry: folderH * 0.67,
+            class: "folder-glow", fill: "#f0bd47", opacity: "0", filter: "url(#folder-glow)"
+          });
+          const back = element("path", {
+            d: `M${x - folderW / 2} ${y - folderH * 0.35}h${folderW * 0.38}l${folderW * 0.13} ${folderH * 0.18}h${folderW * 0.49}v${folderH * 0.8}h-${folderW}z`,
+            class: "folder-back", rx: unit * 0.1, fill: colors[i]
+          });
+          const front = element("path", {
+            d: `M${x - folderW * 0.5} ${y - folderH * 0.05}q0 -${folderH * 0.12} ${folderW * 0.13} -${folderH * 0.12}h${folderW * 0.87}v${folderH * 0.72}q0 ${folderH * 0.12} -${folderW * 0.13} ${folderH * 0.12}h-${folderW * 0.74}q-${folderW * 0.13} 0 -${folderW * 0.13} -${folderH * 0.12}z`,
+            class: "folder-front", fill: colors[i], stroke: "#fff", "stroke-opacity": ".25", "stroke-width": unit * 0.025
+          });
+          const number = element("text", {
+            x, y: y + folderH * 0.31, "text-anchor": "middle",
+            fill: "#fff", "font-size": unit * 0.33, "font-weight": "800",
+            "pointer-events": "none"
+          });
+          number.textContent = "";
+          const portraitCard = element("g", { transform: `translate(${x - folderW * .33} ${y - folderH * .3}) rotate(${i % 2 ? 4 : -4} ${folderW * .33} ${folderH * .31})` });
+          portraitCard.append(element("rect", {
+            width: folderW * .66, height: folderH * .63, rx: unit * .065,
+            fill: "#f8e5bd", stroke: "#fff9e6", "stroke-width": unit * .035,
+            filter: "url(#folder-glow)"
+          }));
+          const portrait = element("svg", {
+            x: folderW * .025, y: folderH * .015, width: folderW * .61, height: folderH * .59,
+            viewBox: `${i % 2 ? 630.5 : 0} ${i > 1 ? 623.5 : 0} 630.5 623.5`, preserveAspectRatio: "xMidYMax meet",
+            "pointer-events": "none"
+          });
+          portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
+          portraitCard.append(portrait);
+          const status = element("text", {
+            x, y: y - folderH * .58, "text-anchor": "middle", opacity: "0",
+            "font-size": unit * .19, "font-weight": "900", "letter-spacing": ".7", "paint-order": "stroke",
+            stroke: "#182028", "stroke-width": unit * .04, "pointer-events": "none"
+          });
+          const activeMarker = element("g", { class: "active-marker", opacity: "0", "pointer-events": "none" });
+          activeMarker.append(
+            element("rect", {
+              x: x - folderW * .34, y: y - folderH * .79, width: folderW * .68, height: unit * .28,
+              rx: unit * .09, fill: "#fff0a4", stroke: "#9f6828", "stroke-width": unit * .025
+            }),
+            element("text", {
+              x, y: y - folderH * .59, "text-anchor": "middle", fill: "#503315",
+              "font-size": unit * .15, "font-weight": "900", "letter-spacing": ".7"
+            })
+          );
+          activeMarker.lastElementChild.textContent = "ДОСЬЕ СЮДА!";
+          group.append(glow, back, front, number, portraitCard, status, activeMarker);
+          folderLayer.append(group);
+          folders.push({ x, y, width: folderW, height: folderH, group, glow, back, front, status });
+        }
+        updateActiveFolder();
+      }
+
+      function updateActiveFolder() {
+        folders.forEach((folder, index) => {
+          const active = index === activeFolder;
+          folder.group.classList.toggle("folder-active", active);
+          folder.glow.setAttribute("opacity", active ? ".95" : "0");
+          folder.glow.setAttribute("filter", active ? "url(#folder-glow)" : "");
+          folder.front.setAttribute("stroke", active ? "#fff4a8" : "#fff");
+          folder.front.setAttribute("stroke-width", active ? unit * 0.115 : unit * 0.025);
+          folder.back.setAttribute("filter", active ? "url(#folder-glow)" : "");
+          const scale = 1.5;
+          const offsetX = folder.x * (1 - scale);
+          const offsetY = folder.y * (1 - scale) - unit * 0.07;
+          const transform = active
+            ? `translate(${offsetX} ${offsetY}) scale(${scale})`
+            : "";
+          folder.group.setAttribute("transform", transform);
+          if (active) folderLayer.append(folder.group);
+        });
+      }
+
+      function createSheet() {
+        if (state !== "playing" || sheets.length >= MAX_SHEETS || !width || !height) return;
+        const size = unit * 1.38;
+        const x = width / 2 + randomBetween(-unit * 0.24, unit * 0.24);
+        const y = height * .23 + randomBetween(-unit * .08, unit * .08);
+        const direction = randomBetween(0, Math.PI * 2);
+        const speed = Math.min(width, height) * 0.18;
+        const group = element("g", { class: "sheet", "aria-label": "Лист досье" });
+        group.append(element("image", {
+          href: "assets/secret-document.png", x: 0, y: 0, width: size, height: size * 1.22,
+          preserveAspectRatio: "none"
+        }));
+        const sheet = {
+          node: group, x, y, size,
+          vx: Math.cos(direction) * speed,
+          vy: Math.sin(direction) * speed
+        };
+        group.addEventListener("pointerdown", event => beginDrag(event, sheet));
+        sheets.push(sheet);
+        sheetLayer.append(group);
+        positionSheet(sheet);
+      }
+
+      function spawnSheetBurst() {
+        const count = 2 + Math.floor(Math.random() * 2);
+        for (let index = 0; index < count; index += 1) createSheet();
+      }
+
+      function positionSheet(sheet, scale = 1, angle = 0) {
+        const rotation = angle ? ` rotate(${angle} ${sheet.size / 2} ${sheet.size * 0.61})` : "";
+        sheet.node.setAttribute("transform", `translate(${sheet.x} ${sheet.y}) scale(${scale})${rotation}`);
+      }
+
+      function positionCarriedSheets() {
+        const scale = 0.62;
+        const count = carriedSheets.length;
+        let settling = false;
+        for (const [index, sheet] of carriedSheets.entries()) {
+          // A short fan keeps every collected sheet readable while leaving the pointer unobscured.
+          const offset = (index - (count - 1) / 2) * unit * 0.12;
+          const targetX = magnetX - sheet.size * scale / 2 + offset;
+          const targetY = magnetY - sheet.size * 1.22 * scale / 2 + Math.abs(offset) * 0.26 - unit * 0.13;
+          const joining = Math.min(1, (performance.now() - sheet.capturedAt) / 170);
+          const eased = 1 - Math.pow(1 - joining, 3);
+          sheet.x = sheet.captureX + (targetX - sheet.captureX) * eased;
+          sheet.y = sheet.captureY + (targetY - sheet.captureY) * eased;
+          positionSheet(sheet, 1 + (scale - 1) * eased, offset / unit * 7 * eased);
+          settling ||= joining < 1;
+        }
+        if (settling && magnet) requestAnimationFrame(positionCarriedSheets);
+      }
+
+      function createMagnet() {
+        const group = element("g", { "pointer-events": "none" });
+        const radius = unit * 0.68;
+        group.append(
+          element("circle", {
+            r: radius, fill: "#fff", "fill-opacity": ".18",
+            stroke: "#f0bd47", "stroke-width": unit * 0.085,
+            filter: "url(#folder-glow)"
+          }),
+          element("circle", {
+            r: radius - unit * 0.075, fill: "none",
+            stroke: "#fff", "stroke-opacity": ".95", "stroke-width": unit * 0.025
+          }),
+          element("circle", {
+            r: unit * 0.075, fill: "#f0bd47",
+            stroke: "#fff", "stroke-width": unit * 0.025
+          })
+        );
+        return group;
+      }
+
+      function captureSheet(sheet) {
+        if (sheet.carried || !magnet) return;
+        sheet.carried = true;
+        sheet.captureX = sheet.x;
+        sheet.captureY = sheet.y;
+        sheet.capturedAt = performance.now();
+        sheet.node.classList.add("carried-sheet");
+        carriedSheets.push(sheet);
+        playRustle();
+        dragLayer.append(sheet.node);
+        positionCarriedSheets();
+        dragLayer.append(magnet);
+      }
+
+      function magnetizeTouchingSheets() {
+        if (!magnet) return;
+        const radius = unit * 0.68;
+        for (const sheet of sheets) {
+          if (sheet.carried) continue;
+          const left = sheet.x;
+          const top = sheet.y;
+          const right = left + sheet.size;
+          const bottom = top + sheet.size * 1.22;
+          const nearestX = Math.max(left, Math.min(magnetX, right));
+          const nearestY = Math.max(top, Math.min(magnetY, bottom));
+          const dx = magnetX - nearestX;
+          const dy = magnetY - nearestY;
+          if (dx * dx + dy * dy <= radius * radius) captureSheet(sheet);
+        }
+      }
+
+      function beginDrag(event, sheet) {
+        if (state !== "playing" || draggedPointerId !== null || event.button !== 0) return;
+        event.preventDefault();
+        dismissTutorial();
+        startAudio();
+        draggedPointerId = event.pointerId;
+        svg.classList.add("magnet-active");
+        magnet = createMagnet();
+        const point = svgPoint(event);
+        magnetX = point.x;
+        magnetY = point.y;
+        captureSheet(sheet);
+        svg.setPointerCapture(event.pointerId);
+        moveDraggedSheet(event);
+      }
+
+      function moveDraggedSheet(event) {
+        if (!magnet || event.pointerId !== draggedPointerId) return;
+        const point = svgPoint(event);
+        magnetX = point.x;
+        magnetY = point.y;
+        positionCarriedSheets();
+        magnetizeTouchingSheets();
+        const folderIndex = folderAt(magnetX, magnetY);
+        if (folderIndex !== -1) {
+          resolveFolder(folderIndex);
+          return;
+        }
+        dragLayer.append(magnet);
+      }
+
+      function finishDrag(event, cancelled = false) {
+        if (!magnet || event.pointerId !== draggedPointerId) return;
+        if (!cancelled) {
+          const folderIndex = folderAt(magnetX, magnetY);
+          if (folderIndex === -1) {
+            releaseCarriedSheets();
+          } else {
+            resolveFolder(folderIndex);
+            return;
+          }
+        } else {
+          releaseCarriedSheets();
+        }
+        magnet.remove();
+        magnet = null;
+        carriedSheets = [];
+        svg.classList.remove("magnet-active");
+        draggedPointerId = null;
+        if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+      }
+
+      function releaseCarriedSheets() {
+        for (const sheet of carriedSheets) {
+          sheet.carried = false;
+          sheet.node.classList.remove("carried-sheet");
+          sheetLayer.append(sheet.node);
+          positionSheet(sheet);
+        }
+      }
+
+      function updateScore() {
+        const scoreValue = document.querySelector("#score-value");
+        if (scoreValue) scoreValue.textContent = `${score} / ${TARGET_SCORE}`;
+        const progressFill = document.querySelector("#progress-fill");
+        if (progressFill) {
+          const scoreWidth = Math.min(width * .38, unit * 4.25);
+          progressFill.setAttribute("width", (scoreWidth - unit * 1.68) * Math.min(score / TARGET_SCORE, 1));
+          for (let index = 0; index < employeeScores.length; index += 1) {
+            const employeeBar = document.querySelector(`#employee-progress-${index}`);
+            if (employeeBar) employeeBar.setAttribute("width", (scoreWidth - unit * 1.1) * Math.min(employeeRunScores[index] / EMPLOYEE_TARGET, 1));
+            const employeeLabel = document.querySelector(`#employee-score-${index}`);
+            if (employeeLabel) employeeLabel.textContent = `${["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"][index]}  ${employeeRunScores[index]} / ${EMPLOYEE_TARGET}`;
+          }
+        }
+      }
+
+      function folderAt(x, y) {
+        return folders.findIndex((folder, index) => {
+          const scale = index === activeFolder ? 1.5 : 1;
+          return x >= folder.x - folder.width * .58 * scale &&
+            x <= folder.x + folder.width * .58 * scale &&
+            y >= folder.y - folder.height * .64 * scale &&
+            y <= folder.y + folder.height * .58 * scale;
+        });
+      }
+
+      function resolveFolder(folderIndex) {
+        if (!magnet || folderLocked) return;
+        folderLocked = true;
+        const folder = folders[folderIndex];
+        const successful = folderIndex === activeFolder;
+        playResultSound(successful);
+        if (successful) {
+          const points = carriedSheets.length * 5;
+          score += points;
+          employeeScores[folderIndex] += points;
+          employeeEarned[folderIndex] += points;
+          employeeRunScores[folderIndex] += points;
+          updateScore();
+          flashFolderSuccess(folder);
+          for (const sheet of [...carriedSheets]) fileSheet(sheet, folder);
+          if (score >= TARGET_SCORE) win();
+        } else {
+          flashFolderError(folder);
+          for (const sheet of [...carriedSheets]) scatterSheet(sheet);
+        }
+        const pointerId = draggedPointerId;
+        magnet.remove();
+        magnet = null;
+        carriedSheets = [];
+        svg.classList.remove("magnet-active");
+        draggedPointerId = null;
+        if (pointerId !== null && svg.hasPointerCapture(pointerId)) svg.releasePointerCapture(pointerId);
+        window.setTimeout(() => { folderLocked = false; }, 120);
+      }
+
+      function removeSheet(sheet) {
+        const index = sheets.indexOf(sheet);
+        if (index !== -1) sheets.splice(index, 1);
+        sheet.node.remove();
+      }
+
+      function createTutorial() {
+        if (tutorialDismissed || tutorialSheet || !sheets.length || !folders.length) return;
+        tutorialSheet = sheets[0];
+        tutorialSheet.node.classList.add("tutorial-target");
+        tutorialStartedAt = performance.now();
+        tutorialPath = element("path", {
+          fill: "none", stroke: "#ffe38a", "stroke-width": unit * .045,
+          "stroke-linecap": "round", "stroke-dasharray": `${unit * .1} ${unit * .09}`,
+          filter: "url(#folder-glow)"
+        });
+        tutorialArrow = element("path", {
+          class: "tutorial-arrow",
+          d: `M${-unit * .11} ${-unit * .065}L${unit * .13} 0L${-unit * .11} ${unit * .065}L${-unit * .045} 0Z`,
+          fill: "#fff4b8", stroke: "#a9712e", "stroke-width": unit * .025,
+          filter: "url(#folder-glow)"
+        });
+        tutorialLayer.replaceChildren(tutorialPath, tutorialArrow);
+      }
+
+      function dismissTutorial() {
+        if (tutorialSheet) tutorialSheet.node.classList.remove("tutorial-target");
+        tutorialDismissed = true;
+        tutorialSheet = null;
+        tutorialPath = null;
+        tutorialArrow = null;
+        tutorialLayer.replaceChildren();
+      }
+
+      function updateTutorial(timestamp) {
+        if (tutorialDismissed) return;
+        if (!tutorialSheet || !sheets.includes(tutorialSheet)) createTutorial();
+        if (!tutorialSheet || !tutorialPath || !tutorialArrow || !folders[activeFolder]) return;
+        const sheetX = tutorialSheet.x + tutorialSheet.size * .5;
+        const sheetY = tutorialSheet.y + tutorialSheet.size * .55;
+        const folder = folders[activeFolder];
+        const targetX = folder.x;
+        const targetY = folder.y - folder.height * .12;
+        const elapsed = (timestamp - tutorialStartedAt) % 3400;
+        const phase = elapsed < 900 ? elapsed / 900 : (elapsed - 900) / 2500;
+        const sourceX = sheetX - unit * .75;
+        const sourceY = sheetY - unit * .55;
+        const isLeading = elapsed >= 850;
+        const fromX = isLeading ? sheetX : sourceX;
+        const fromY = isLeading ? sheetY : sourceY;
+        const toX = isLeading ? targetX : sheetX;
+        const toY = isLeading ? targetY : sheetY;
+        const x = fromX + (toX - fromX) * phase;
+        const y = fromY + (toY - fromY) * phase - Math.sin(phase * Math.PI) * unit * .11;
+        const angle = Math.atan2(toY - fromY, toX - fromX) * 180 / Math.PI;
+        tutorialArrow.setAttribute("transform", `translate(${x} ${y}) rotate(${angle})`);
+        tutorialPath.setAttribute("d", `M${sheetX} ${sheetY} Q${(sheetX + targetX) / 2} ${Math.min(sheetY, targetY) - unit * .34} ${targetX} ${targetY}`);
+        tutorialPath.setAttribute("opacity", isLeading ? ".95" : "0");
+      }
+
+      function flashFolderError(folder) {
+        folder.group.classList.remove("folder-error");
+        // Restart the CSS animation when the player makes consecutive mistakes.
+        void folder.group.getBoundingClientRect();
+        folder.group.classList.add("folder-error");
+        window.setTimeout(() => folder.group.classList.remove("folder-error"), 700);
+        showFolderStatus(folder, "НЕ ТУДА", "#ff7777");
+      }
+
+      function flashFolderSuccess(folder) {
+        folder.group.classList.remove("folder-success");
+        void folder.group.getBoundingClientRect();
+        folder.group.classList.add("folder-success");
+        window.setTimeout(() => folder.group.classList.remove("folder-success"), 780);
+        showFolderStatus(folder, "ГОТОВО!", "#73e7a1");
+      }
+
+      function showFolderStatus(folder, text, color) {
+        folder.status.textContent = text;
+        folder.status.setAttribute("fill", color);
+        folder.status.setAttribute("opacity", "1");
+        window.setTimeout(() => folder.status.setAttribute("opacity", "0"), 720);
+      }
+
+      function animateSheet(sheet, targetX, targetY, options = {}) {
+        const startX = sheet.x;
+        const startY = sheet.y;
+        const duration = options.duration || 520;
+        const arc = options.arc || 0;
+        const endScale = options.endScale ?? 1;
+        const endAngle = options.endAngle || 0;
+        const startedAt = performance.now();
+        sheet.node.classList.remove("carried-sheet");
+        const frame = now => {
+          const progress = Math.min(1, (now - startedAt) / duration);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          sheet.x = startX + (targetX - startX) * eased;
+          sheet.y = startY + (targetY - startY) * eased - Math.sin(progress * Math.PI) * arc;
+          positionSheet(sheet, 1 + (endScale - 1) * eased, endAngle * eased);
+          sheet.node.setAttribute("opacity", `${1 - Math.max(0, progress - .62) / .38}`);
+          if (progress < 1) requestAnimationFrame(frame);
+          else {
+            sheet.node.remove();
+            if (options.done) options.done();
+          }
+        };
+        requestAnimationFrame(frame);
+      }
+
+      function fileSheet(sheet, folder) {
+        const index = sheets.indexOf(sheet);
+        if (index !== -1) sheets.splice(index, 1);
+        const landingX = folder.x - sheet.size * 0.26 + randomBetween(-unit * .18, unit * .18);
+        const landingY = folder.y - folder.height * .08 + randomBetween(-unit * .08, unit * .08);
+        animateSheet(sheet, landingX, landingY, {
+          duration: 480 + Math.random() * 130,
+          arc: unit * .42,
+          endScale: .22,
+          endAngle: randomBetween(-12, 12)
+        });
+      }
+
+      function scatterSheet(sheet) {
+        const index = sheets.indexOf(sheet);
+        if (index !== -1) sheets.splice(index, 1);
+        const angle = randomBetween(0, Math.PI * 2);
+        const distance = randomBetween(unit * 1.1, unit * 1.85);
+        animateSheet(
+          sheet,
+          sheet.x + Math.cos(angle) * distance,
+          sheet.y + Math.sin(angle) * distance,
+          { duration: 560 + Math.random() * 100, arc: -unit * .18, endScale: .72, endAngle: randomBetween(-55, 55) }
+        );
+      }
+
+      function changeActiveFolder() {
+        let next = activeFolder;
+        while (next === activeFolder) next = Math.floor(Math.random() * folders.length);
+        activeFolder = next;
+        updateActiveFolder();
+        nextFolderChange = randomBetween(5, 15);
+      }
+
+      function win() {
+        state = "won";
+        if (animationFrame) cancelAnimationFrame(animationFrame);
+        animationFrame = 0;
+        gameMusic.pause();
+        renderFacts();
+        factsScreen.hidden = false;
+        backToComputer.focus();
+      }
+
+      function renderFacts() {
+        factsGrid.replaceChildren();
+        employees.forEach((employee, employeeIndex) => {
+          const file = document.createElement("section");
+          file.className = "employee-file";
+          const intro = document.createElement("div");
+          intro.className = "employee-intro";
+          const portrait = element("svg", {
+            class: "facts-portrait",
+            viewBox: `${employeeIndex % 2 ? 630.5 : 0} ${employeeIndex > 1 ? 623.5 : 0} 630.5 623.5`,
+            preserveAspectRatio: "xMidYMax meet", "aria-hidden": "true"
+          });
+          portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
+          const introCopy = document.createElement("div");
+          const heading = document.createElement("h2");
+          heading.textContent = employee.name;
+          const description = document.createElement("p");
+          description.className = "employee-description";
+          description.textContent = employee.description;
+          introCopy.append(heading, description);
+          intro.append(portrait, introCopy);
+          const balance = document.createElement("p");
+          balance.className = "employee-balance";
+          const relation = affection[employeeIndex] > 0
+            ? "♥".repeat(Math.min(affection[employeeIndex], 10))
+            : affection[employeeIndex] < 0
+              ? "💔".repeat(Math.min(Math.abs(affection[employeeIndex]), 4))
+              : "♡";
+          const relationHearts = document.createElement("span");
+          relationHearts.className = `relation-hearts ${affection[employeeIndex] > 0 ? "positive" : affection[employeeIndex] < 0 ? "negative" : ""}`;
+          relationHearts.textContent = relation;
+          balance.append(`Очки для досье: ${employeeScores[employeeIndex]} · отношение: `, relationHearts);
+          const recognitionLabel = document.createElement("p");
+          recognitionLabel.className = "recognition-label";
+          recognitionLabel.textContent = "Узнавание сотрудника";
+          const pointsRow = document.createElement("div");
+          pointsRow.className = "points-row";
+          const pointsTrack = document.createElement("div");
+          pointsTrack.className = "points-track";
+          const pointsFill = document.createElement("span");
+          pointsFill.className = "points-fill";
+          pointsFill.style.width = `${factsUnlocked[employeeIndex] / employee.facts.length * 100}%`;
+          pointsTrack.append(pointsFill);
+          const pointsNumber = document.createElement("span");
+          pointsNumber.className = "points-number";
+          pointsNumber.textContent = `${factsUnlocked[employeeIndex]} / ${employee.facts.length}`;
+          pointsRow.append(pointsTrack, pointsNumber);
+          const list = document.createElement("div");
+          list.className = "fact-list";
+          employee.facts.forEach((fact, factIndex) => {
+            const unlocked = factIndex < factsUnlocked[employeeIndex];
+            const row = document.createElement("div");
+            row.className = `fact${unlocked ? "" : " locked"}`;
+            const icon = document.createElement("span");
+            icon.className = "fact-lock";
+            icon.textContent = unlocked ? "✓" : "🔒";
+            const text = document.createElement("span");
+            text.textContent = unlocked ? fact : "Засекреченный факт";
+            row.append(icon, text);
+            if (!unlocked && factIndex === factsUnlocked[employeeIndex]) {
+              const cost = factCost(factIndex);
+              const button = document.createElement("button");
+              button.className = "fact-button";
+              button.type = "button";
+              button.textContent = `Открыть · ${cost}`;
+              button.disabled = employeeScores[employeeIndex] < cost || !isFactAvailable(employeeIndex, factIndex);
+              if (!isFactAvailable(employeeIndex, factIndex)) button.textContent = "Сначала выясните про ручки Игоря";
+              button.addEventListener("click", () => unlockFact(employeeIndex));
+              row.append(button);
+            }
+            list.append(row);
+          });
+          file.append(intro, balance, recognitionLabel, pointsRow, list);
+          factsGrid.append(file);
+        });
+        const knownFacts = factsUnlocked.reduce((total, count) => total + count, 0);
+        const allFacts = employees.reduce((total, employee) => total + employee.facts.length, 0);
+        const allKnown = knownFacts === allFacts;
+        ["Сотрудник №5?", "Ты?"].forEach((name, index) => {
+          const mystery = document.createElement("section");
+          mystery.className = "employee-file mystery-file";
+          const mark = document.createElement("div");
+          mark.className = "mystery-mark";
+          mark.textContent = allKnown ? "✦" : "?";
+          const heading = document.createElement("h2");
+          heading.textContent = allKnown ? `${name}: сигнал получен` : `${name}: засекречено`;
+          const note = document.createElement("p");
+          note.textContent = allKnown
+            ? "Новое досье уже на подходе. Продолжение следует."
+            : `Откройте все факты: ${knownFacts} / ${allFacts}.`;
+          mystery.append(mark, heading, note);
+          factsGrid.append(mystery);
+        });
+      }
+
+      function unlockFact(employeeIndex) {
+        const cost = factCost(factsUnlocked[employeeIndex]);
+        if (employeeScores[employeeIndex] < cost || factsUnlocked[employeeIndex] >= employees[employeeIndex].facts.length || !isFactAvailable(employeeIndex, factsUnlocked[employeeIndex])) return;
+        employeeScores[employeeIndex] -= cost;
+        factsUnlocked[employeeIndex] += 1;
+        renderFacts();
+      }
+
+      function showDialogue(employeeIndex) {
+        shownDialogueEmployees.add(employeeIndex);
+        activeDialogue = { employeeIndex, panel: 0 };
+        factsScreen.hidden = true;
+        dialogueScreen.hidden = false;
+        dialoguePortrait.style.display = "block";
+        gameMusic.pause();
+        novelMusic.volume = 0;
+        if (novelMusic.paused) novelMusic.play().catch(() => {});
+        fadeNovelMusic(.18, 900);
+        renderDialogue();
+      }
+
+      function currentMaximumLove(employeeIndex) {
+        return factsUnlocked[employeeIndex] >= dialogueMilestones[0] ? 2 : 0;
+      }
+
+      function showOfficeFate() {
+        const fullySupported = employees.filter((employee, employeeIndex) => {
+          const maximumLove = currentMaximumLove(employeeIndex);
+          return maximumLove > 0 && affection[employeeIndex] >= maximumLove;
+        }).length;
+        const possibleNow = employees.filter((employee, employeeIndex) => currentMaximumLove(employeeIndex) > 0).length;
+        const outlook = fullySupported === 4
+          ? "Такими темпами офис преуспеет. Даже Александр Михайлович, вероятно, назовёт это своей стратегией."
+          : fullySupported >= 2
+            ? "Такими темпами ничего не изменится: офис будет держаться на кофе, привычке и чьём-то терпении."
+            : "Такими темпами мы все разбежимся. Пока офис держится на скрепках и чужом чувстве вины.";
+        fateText.textContent = `${outlook} На максимальном доверии сейчас ${fullySupported} из ${employees.length} сотрудников; доступные диалоги есть у ${possibleNow}.`;
+        fateEmployees.replaceChildren();
+        employees.forEach((employee, employeeIndex) => {
+          const maximumLove = currentMaximumLove(employeeIndex);
+          const openedLove = Math.min(Math.max(affection[employeeIndex], 0), maximumLove);
+          const card = document.createElement("section");
+          card.className = "fate-employee";
+          const name = document.createElement("h2");
+          name.textContent = employee.name.split(" — ")[0];
+          const love = document.createElement("p");
+          love.className = "fate-love";
+          love.textContent = maximumLove ? `Отношение: ${openedLove} / ${maximumLove}` : "Диалог пока закрыт";
+          const hearts = document.createElement("strong");
+          hearts.textContent = maximumLove ? `${"♥".repeat(openedLove)}${"♡".repeat(maximumLove - openedLove)}` : "—";
+          love.append(hearts);
+          card.append(name, love);
+          fateEmployees.append(card);
+        });
+        const locked = document.createElement("section");
+        locked.className = "fate-employee locked";
+        locked.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
+        fateEmployees.append(locked);
+        factsScreen.hidden = true;
+        fateScreen.hidden = false;
+      }
+
+      function showEnding() {
+        const lovedBy = affection.filter(value => value > 0).length;
+        const ending = lovedBy === 4
+          ? "Все четверо на вашей стороне. Фирма каким-то чудом держится, а хаос впервые стал управляемым."
+          : lovedBy >= 2
+            ? "Вы продолжаете работать в привычном хаосе. Всё умеренно плохо, но команда пока не разбежалась."
+            : "Фирма развалилась: никто не смог или не захотел её спасать, и все разошлись своими дорогами.";
+        factsScreen.hidden = true;
+        dialogueScreen.hidden = false;
+        dialoguePortrait.style.display = "none";
+        dialogueName.textContent = "ФИНАЛ";
+        dialogueText.textContent = ending;
+        dialogueActions.replaceChildren();
+        const next = document.createElement("button");
+        next.className = "dialogue-next";
+        next.type = "button";
+        next.textContent = "К компьютеру";
+        next.addEventListener("click", () => { dialogueScreen.hidden = true; startGame(); });
+        dialogueActions.append(next);
+      }
+
+      function renderDialogue() {
+        const { employeeIndex, panel } = activeDialogue;
+        if (panel === 5) fadeNovelMusic(.09, 450);
+        if (panel === 6) fadeNovelMusic(.045, 450);
+        if (panel === 7) fadeNovelMusic(0, 450);
+        const positive = affection[employeeIndex] >= 0;
+        const cellX = employeeIndex * 443.5;
+        const cellY = positive ? 0 : 443.5;
+        dialoguePortrait.setAttribute("viewBox", `${cellX} ${cellY} 443.5 443.5`);
+        dialoguePortrait.replaceChildren(element("image", { href: "assets/dialogue-portraits.png", x: 0, y: 0, width: 1774, height: 887 }));
+        dialogueName.textContent = employees[employeeIndex].name;
+        dialogueText.textContent = dialogueLines[employeeIndex][panel];
+        dialogueActions.replaceChildren();
+        if (panel === 3 || panel === 7) {
+          const choiceCopy = [
+            [
+              ["Кашемир — почти офисная необходимость. Особенно в этом офисе.", "Мне кажется, у кредитки уже есть адвокат."],
+              ["Ты лучше их всех — даже лучше корпоративной кредитки.", "Я уже вижу, как это попадёт в служебную записку."]
+            ],
+            [
+              ["С такой уверенностью вы и правда выглядите как человек с настоящим креслом.", "Если полиция спросит, я слишком занят принтером."],
+              ["Конечно. Вы же самый убедительный человек с чужой подписью.", "Мне кажется, полиция любит такие истории."]
+            ],
+            [
+              ["За дверью выход, а не новый отчёт. Это уже неплохо.", "Может, сначала закрой восемь вкладок с чужими задачами?"],
+              ["Да, выбери себя: ты полезнее этого принтера, и он хотя бы выключается.", "Не выбирай себе ничего начинать — тебе и так хватит."]
+            ],
+            [
+              ["Верю. После ночной смены здесь и не такое объяснение подходит.", "Если это НЛО, пусть они сначала заполнят журнал посетителей."],
+              ["Верю. В этом офисе НЛО — не самая странная версия.", "Мне пора к компьютеру, а тебе — к инопланетянам."]
+            ]
+          ][employeeIndex][panel === 3 ? 0 : 1];
+          const choices = document.createElement("div");
+          choices.className = "dialogue-choices";
+          const support = document.createElement("button");
+          support.className = "dialogue-choice";
+          support.type = "button";
+          support.textContent = choiceCopy[0];
+          support.addEventListener("click", () => chooseDialogue(true));
+          const dismiss = document.createElement("button");
+          dismiss.className = "dialogue-choice";
+          dismiss.type = "button";
+          dismiss.textContent = choiceCopy[1];
+          dismiss.addEventListener("click", () => chooseDialogue(false));
+          choices.append(support, dismiss);
+          dialogueActions.append(choices);
+        } else {
+          const next = document.createElement("button");
+          next.className = "dialogue-next";
+          next.type = "button";
+          next.textContent = "Дальше";
+          next.addEventListener("click", () => { activeDialogue.panel += 1; renderDialogue(); });
+          dialogueActions.append(next);
+        }
+      }
+
+      function chooseDialogue(supportive) {
+        affection[activeDialogue.employeeIndex] += supportive ? 1 : -1;
+        if (activeDialogue.panel === 7) {
+          fadeNovelMusic(0, 300, () => {
+            novelMusic.pause();
+            dialogueScreen.hidden = true;
+            activeDialogue = null;
+            startGame();
+          });
+          return;
+        }
+        activeDialogue.panel += 1;
+        renderDialogue();
+      }
+
+      function returnToComputer() {
+        const gains = factsUnlocked.map((count, index) => count - factsAtLastReturn[index]);
+        const allLearnedTogether = gains.every(gain => gain >= 2);
+        const candidates = [];
+        factsUnlocked.forEach((count, employeeIndex) => {
+          if (shownDialogueEmployees.has(employeeIndex)) return;
+          dialogueMilestones.forEach(milestone => {
+            if (count >= milestone && !dialogueTriggered[employeeIndex].has(milestone)) candidates.push({ employeeIndex, milestone });
+          });
+        });
+        factsUnlocked.forEach((count, index) => { factsAtLastReturn[index] = count; });
+        if (allLearnedTogether) {
+          const preferred = candidates.filter(item => gains[item.employeeIndex] >= 2);
+          if (preferred.length) {
+            const selected = preferred[Math.floor(Math.random() * preferred.length)];
+            dialogueTriggered[selected.employeeIndex].add(selected.milestone);
+            showDialogue(selected.employeeIndex);
+            return;
+          }
+        }
+        if (candidates.length) {
+          const selected = candidates[Math.floor(Math.random() * candidates.length)];
+          dialogueTriggered[selected.employeeIndex].add(selected.milestone);
+          showDialogue(selected.employeeIndex);
+          return;
+        }
+        if (factsUnlocked.every((count, index) => count === employees[index].facts.length)) {
+          showEnding();
+          return;
+        }
+        startGame();
+      }
+
+      function factCost(factIndex) {
+        return Math.min(10 + factIndex * 5, 30);
+      }
+
+      function gameLoop(timestamp) {
+        if (state !== "playing") return;
+        const delta = previousFrame ? Math.min((timestamp - previousFrame) / 1000, 0.05) : 0;
+        previousFrame = timestamp;
+        spawnElapsed += delta;
+        nextFolderChange -= delta;
+        if (nextFolderChange <= 0) changeActiveFolder();
+        if (spawnElapsed >= SPAWN_INTERVAL) {
+          spawnElapsed %= SPAWN_INTERVAL;
+          spawnSheetBurst();
+        }
+
+        for (let i = sheets.length - 1; i >= 0; i -= 1) {
+          const sheet = sheets[i];
+          if (sheet.carried) continue;
+          sheet.x += sheet.vx * delta;
+          sheet.y += sheet.vy * delta;
+          positionSheet(sheet);
+          if (
+            sheet.x + sheet.size < 0 || sheet.x > width ||
+            sheet.y + sheet.size * 1.22 < 0 || sheet.y > height
+          ) {
+            removeSheet(sheet);
+          }
+        }
+        updateTutorial(timestamp);
+        animationFrame = requestAnimationFrame(gameLoop);
+      }
+
+      function startGame() {
+        if (animationFrame) cancelAnimationFrame(animationFrame);
+        for (const sheet of sheets) sheet.node.remove();
+        sheets.length = 0;
+        score = 0;
+        employeeRunScores.fill(0);
+        activeFolder = Math.floor(Math.random() * 4);
+        nextFolderChange = randomBetween(5, 15);
+        spawnElapsed = 0;
+        previousFrame = 0;
+        if (magnet) magnet.remove();
+        magnet = null;
+        carriedSheets = [];
+        draggedPointerId = null;
+        svg.classList.remove("magnet-active");
+        state = "playing";
+        novelMusic.pause();
+        novelMusic.currentTime = 0;
+        startAudio();
+        enterFullscreen();
+        requestLandscape();
+        splash.hidden = true;
+        winScreen.hidden = true;
+        factsScreen.hidden = true;
+        fateScreen.hidden = true;
+        calculateLayout();
+        updateScore();
+        animationFrame = requestAnimationFrame(gameLoop);
+      }
+
+      svg.addEventListener("pointermove", moveDraggedSheet);
+      svg.addEventListener("pointerup", event => finishDrag(event));
+      svg.addEventListener("pointercancel", event => finishDrag(event, true));
+      restartButton.addEventListener("click", startGame);
+      backToComputer.addEventListener("click", returnToComputer);
+      officeFate.addEventListener("click", showOfficeFate);
+      backToDossiers.addEventListener("click", () => {
+        fateScreen.hidden = true;
+        factsScreen.hidden = false;
+        renderFacts();
+      });
+      startMission.addEventListener("click", startGame);
+      dialogueScreen.addEventListener("click", event => {
+        if (!activeDialogue || event.target.closest("button") || activeDialogue.panel === 3 || activeDialogue.panel === 7) return;
+        activeDialogue.panel += 1;
+        renderDialogue();
+      });
+
+      let resizeTimer = 0;
+      window.addEventListener("resize", () => {
+        window.clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(calculateLayout, 80);
+      });
+
+      calculateLayout();
+    })();
+  </script>
+</body>
+</html>
