@@ -187,6 +187,8 @@
     .splash-card p { margin: 9px 0 18px; font-weight: 700; }
     .splash-card button { border: 2px solid #fff1b6; border-radius: 999px; padding: 14px 30px; background: #d98d3e; color: #fff9e6; font: inherit; font-weight: 900; font-size: 17px; cursor: pointer; box-shadow: 0 8px 24px rgb(0 0 0 / 35%); }
     .splash-card button:hover { background: #edaa58; }
+    .splash-card button:disabled { cursor: wait; opacity: .72; animation: start-button-loading .82s ease-in-out infinite; }
+    @keyframes start-button-loading { 0%, 100% { transform: scale(1); filter: brightness(.88); } 50% { transform: scale(1.045); filter: brightness(1.26); } }
 
     .rotate-device { position: fixed; z-index: 50; inset: 0; display: none; place-items: center; padding: 28px; background: #101b27; color: #fff1c9; text-align: center; }
     .rotate-icon { display: block; margin: 0 auto 18px; font-size: 60px; transform: rotate(90deg); }
@@ -345,7 +347,7 @@
     <div class="splash-card">
       <h1 class="office-logo"><span>ОФИСНОЕ</span><strong>ШАПИТО</strong></h1>
       <p>Офис трещит по швам. Разберите завалы — и узнайте, кто здесь за что отвечает.</p>
-      <button id="start-mission" type="button">Начать смену</button>
+      <button id="start-mission" type="button" disabled>Начать смену</button>
     </div>
   </section>
   <section class="rotate-device" aria-live="polite">
@@ -606,6 +608,8 @@
       let carriedLayoutFrame = 0;
       let savedRunAvailable = false;
       let hasStoredProgress = false;
+      let gameAssetsPromise = null;
+      let splashLaunchPending = false;
       let restoredSheets = [];
 
       function randomBetween(min, max) {
@@ -731,6 +735,64 @@
           "clip-path": "url(#dialogue-portrait-clip)"
         });
         dialoguePortrait.replaceChildren(definitions, image);
+      }
+
+      function preloadImage(source) {
+        return new Promise(resolve => {
+          const image = new Image();
+          let finished = false;
+          const finish = () => {
+            if (finished) return;
+            finished = true;
+            resolve();
+          };
+          image.decoding = "async";
+          image.addEventListener("load", () => {
+            if (typeof image.decode !== "function") {
+              finish();
+              return;
+            }
+            image.decode().then(finish, finish);
+          }, { once: true });
+          image.addEventListener("error", finish, { once: true });
+          image.src = source;
+          window.setTimeout(finish, 8000);
+        });
+      }
+
+      function warmAudio(audio) {
+        const finish = () => {
+          audio.removeEventListener("canplay", finish);
+          audio.removeEventListener("error", finish);
+        };
+        audio.addEventListener("canplay", finish, { once: true });
+        audio.addEventListener("error", finish, { once: true });
+        audio.load();
+      }
+
+      function preloadGameAssets() {
+        if (!gameAssetsPromise) {
+          gameAssetsPromise = Promise.all([
+            preloadImage("assets/office-background-v2.png"),
+            preloadImage("assets/employee-portraits-v3.png"),
+            preloadImage("assets/secret-document.png")
+          ]).then(() => undefined);
+          warmAudio(gameMusic);
+          warmAudio(novelMusic);
+        }
+        return gameAssetsPromise;
+      }
+
+      function prepareSplash() {
+        const minimumLoadingTime = new Promise(resolve => window.setTimeout(resolve, 1200));
+        const splashAssets = Promise.all([
+          preloadImage("assets/office-splash.png"),
+          preloadImage("assets/dialogue-portraits.png")
+        ]);
+        splashAssets.then(() => preloadGameAssets());
+        Promise.all([splashAssets, minimumLoadingTime]).then(() => {
+          startMission.disabled = false;
+        });
       }
 
       function startAudio() {
@@ -1745,10 +1807,17 @@
         if (!openingDialogue) return;
         const { resume } = openingDialogue;
         openingDialogue = null;
+        const next = dialogueActions.querySelector("button");
+        if (next) {
+          next.disabled = true;
+          next.textContent = "Подготавливаем смену…";
+        }
         fadeNovelMusic(0, 240, () => {
           novelMusic.pause();
-          dialogueScreen.hidden = true;
-          startGame({ resume });
+          preloadGameAssets().then(() => {
+            dialogueScreen.hidden = true;
+            startGame({ resume });
+          });
         });
       }
 
@@ -2005,8 +2074,12 @@
         renderFacts();
       });
       startMission.addEventListener("click", () => {
+        if (splashLaunchPending || startMission.disabled) return;
         if (hasStoredProgress) {
-          startGame({ resume: savedRunAvailable });
+          splashLaunchPending = true;
+          startMission.disabled = true;
+          startMission.textContent = "Подготавливаем смену…";
+          preloadGameAssets().then(() => startGame({ resume: savedRunAvailable }));
         } else {
           showOpeningDialogue(false);
         }
@@ -2033,6 +2106,7 @@
       });
       loadProgress();
       calculateLayout();
+      prepareSplash();
     })();
   </script>
 </body>
