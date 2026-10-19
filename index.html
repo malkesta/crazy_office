@@ -185,7 +185,11 @@
     .office-logo span { color: #f1bf65; font-family: system-ui, sans-serif; font-size: .36em; font-weight: 1000; letter-spacing: .25em; line-height: 1; text-shadow: 0 2px 0 #6f3429; }
     .office-logo strong { display: block; font: inherit; }
     .splash-card p { margin: 9px 0 18px; font-weight: 700; }
+    .splash-actions { display: grid; justify-items: center; gap: 10px; }
     .splash-card button { border: 2px solid #fff1b6; border-radius: 999px; padding: 14px 30px; background: #d98d3e; color: #fff9e6; font: inherit; font-weight: 900; font-size: 17px; cursor: pointer; box-shadow: 0 8px 24px rgb(0 0 0 / 35%); }
+    .splash-card .continue-mission { min-width: min(88vw, 320px); padding: 18px 36px; background: #2a9d68; font-size: 21px; }
+    .splash-card .continue-mission:hover { background: #39b77b; }
+    .splash-card .fresh-mission { padding: 10px 21px; background: rgb(34 52 65 / 82%); font-size: 14px; }
     .splash-card button:hover { background: #edaa58; }
     .splash-card button:disabled { cursor: wait; opacity: .72; animation: start-button-loading .82s ease-in-out infinite; }
     @keyframes start-button-loading { 0%, 100% { transform: scale(1); filter: brightness(.88); } 50% { transform: scale(1.045); filter: brightness(1.26); } }
@@ -347,7 +351,10 @@
     <div class="splash-card">
       <h1 class="office-logo"><span>ОФИСНОЕ</span><strong>ШАПИТО</strong></h1>
       <p>Офис трещит по швам. Разберите завалы — и узнайте, кто здесь за что отвечает.</p>
-      <button id="start-mission" type="button" disabled>Начать смену</button>
+      <div class="splash-actions">
+        <button id="start-mission" type="button" disabled>Начать смену</button>
+        <button id="start-fresh" class="fresh-mission" type="button" hidden disabled>Начать смену</button>
+      </div>
     </div>
   </section>
   <section class="rotate-device" aria-live="polite">
@@ -409,6 +416,7 @@
       const novelMusic = document.querySelector("#novel-music");
       const splash = document.querySelector("#splash");
       const startMission = document.querySelector("#start-mission");
+      const startFresh = document.querySelector("#start-fresh");
       const dialogueScreen = document.querySelector("#dialogue-screen");
       const dialoguePortrait = document.querySelector("#dialogue-portrait");
       const dialogueName = document.querySelector("#dialogue-name");
@@ -624,7 +632,44 @@
         });
       }
 
+      function syncSplashActions() {
+        if (hasStoredProgress) {
+          startMission.textContent = "Продолжить смену";
+          startMission.classList.add("continue-mission");
+          startFresh.hidden = false;
+        } else {
+          startMission.textContent = "Начать смену";
+          startMission.classList.remove("continue-mission");
+          startFresh.hidden = true;
+        }
+      }
+
+      function resetProgress() {
+        try {
+          window.localStorage.removeItem(SAVE_KEY);
+        } catch {
+          // The in-memory reset still works if storage is unavailable.
+        }
+        employeeScores.fill(0);
+        employeeEarned.fill(0);
+        employeeRunScores.fill(0);
+        factsUnlocked.fill(0);
+        factsAtLastReturn.fill(0);
+        affection.fill(0);
+        dialogueTriggered.forEach(triggered => triggered.clear());
+        shownDialogues.forEach(shown => shown.clear());
+        score = 0;
+        activeFolder = Math.floor(Math.random() * 4);
+        nextFolderChange = randomBetween(5, 15);
+        spawnElapsed = 0;
+        savedRunAvailable = false;
+        hasStoredProgress = false;
+        restoredSheets = [];
+        syncSplashActions();
+      }
+
       function saveProgress() {
+        if (state === "splash" && !hasStoredProgress) return;
         try {
           const shortestSide = Math.min(width, height) || 1;
           const data = {
@@ -705,7 +750,6 @@
               ).slice(0, MAX_SHEETS);
             }
             savedRunAvailable = true;
-            startMission.textContent = "Продолжить смену";
           }
         } catch {
           // A damaged or unavailable save is ignored rather than blocking the game.
@@ -784,6 +828,7 @@
       }
 
       function prepareSplash() {
+        syncSplashActions();
         const minimumLoadingTime = new Promise(resolve => window.setTimeout(resolve, 1200));
         const splashAssets = Promise.all([
           preloadImage("assets/office-splash.png"),
@@ -792,6 +837,7 @@
         splashAssets.then(() => preloadGameAssets());
         Promise.all([splashAssets, minimumLoadingTime]).then(() => {
           startMission.disabled = false;
+          startFresh.disabled = false;
         });
       }
 
@@ -2057,7 +2103,8 @@
         }
         updateScore();
         savedRunAvailable = false;
-        startMission.textContent = "Начать смену";
+        hasStoredProgress = true;
+        splashLaunchPending = false;
         saveProgress();
         animationFrame = requestAnimationFrame(gameLoop);
       }
@@ -2083,6 +2130,14 @@
         } else {
           showOpeningDialogue(false);
         }
+      });
+      startFresh.addEventListener("click", () => {
+        if (splashLaunchPending || startFresh.disabled) return;
+        splashLaunchPending = true;
+        startMission.disabled = true;
+        startFresh.disabled = true;
+        resetProgress();
+        showOpeningDialogue(false);
       });
       dialogueScreen.addEventListener("click", event => {
         if (openingDialogue) {
