@@ -275,6 +275,14 @@
     .fact-lock { flex: 0 0 24px; text-align: center; }
     .fact-button { margin-left: auto; background: #5a8fc1; color: white; font-size: 12px; }
     .fact-button:disabled { background: #3d4c57; color: #87939b; cursor: not-allowed; }
+    .fact.dialogue-fact { border: 1px solid rgb(132 160 173 / 48%); }
+    .fact.dialogue-fact.available { border-color: #f2c85d; }
+    .dialogue-inline-icon { display: inline-grid; flex: 0 0 auto; place-items: center; width: 20px; height: 18px; border: 1px solid currentColor; border-radius: 9px; color: #8fa3aa; font-size: 11px; line-height: 1; }
+    .fact.dialogue-fact.available .dialogue-inline-icon { color: #f2c85d; animation: dialogue-bubble-pulse 1.15s ease-in-out infinite; }
+    .fact.dialogue-fact.completed .dialogue-inline-icon { color: #6fc7a2; }
+    .fact.dialogue-fact.queued .dialogue-inline-icon { color: #8eb9d7; }
+    .fact.dialogue-fact.future .dialogue-inline-icon { color: #6d7d84; }
+    @keyframes dialogue-bubble-pulse { 0%,100% { transform: scale(.92); box-shadow: 0 0 0 rgb(242 200 93 / 0); } 50% { transform: scale(1.1); box-shadow: 0 0 12px rgb(242 200 93 / 78%); } }
     .fact-alert { display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: 5px; border-radius: 50%; background: #f0c13c; color: #372208; font-size: 14px; font-weight: 1000; animation: fact-alert-pulse 1.1s ease-in-out infinite; }
     @keyframes fact-alert-pulse { 0%,100% { transform: scale(.9); box-shadow: 0 0 0 rgb(240 193 60 / 0); } 50% { transform: scale(1.15); box-shadow: 0 0 13px rgb(255 218 93 / 90%); } }
     @media (max-width: 980px) { .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -410,6 +418,7 @@
       const TARGET_SCORE = 200;
       const MAX_SHEETS = 14;
       const SPAWN_INTERVAL = 1.65;
+      const SAVE_KEY = "office-shapito-save-v1";
 
       let width = 0;
       let height = 0;
@@ -422,10 +431,12 @@
       const factsUnlocked = [0, 0, 0, 0];
       const affection = [0, 0, 0, 0];
       const factsAtLastReturn = [0, 0, 0, 0];
-      const dialogueMilestones = [2, 6, 10, 14, 18];
+      const dialogueMilestones = [2, 10, 20];
+      const playableDialogueMilestones = dialogueMilestones.slice(0, 2);
       const dialogueTriggered = [new Set(), new Set(), new Set(), new Set()];
-      const shownDialogueEmployees = new Set();
+      const shownDialogues = [new Set(), new Set(), new Set(), new Set()];
       let activeDialogue = null;
+      let openingDialogue = null;
       let mobileFactsEmployee = null;
       let mobileFactsVisits = 0;
       let mobileFactsSortKnownLast = false;
@@ -526,6 +537,32 @@
         ["Опять в коридоре свет мигал. Это либо проводка, либо они.", "Они забрали меня на три часа. Вернули с головной болью и идеей не спорить с космосом.", "Никто не верит. Даже когда я показываю им идеальную схему тарелки на парковке.", "Ты, кажется, умеешь слушать. Это редкость в этой компании.", "Я не боюсь НЛО. Я боюсь, что они вернутся и попросят отчёт о наших расходах.", "Если увидишь зелёный свет за окном — не маши. Один раз уже помахал.", "Я просто хочу, чтобы хоть кто-то сказал: «да, это могло случиться».", "Ты мне веришь?"
         ]
       ];
+      const secondDialogueLines = [
+        ["Принтер снова заработал. Сам. Как обычно, без моего участия.", "Нет, я не трогала его боковую крышку. И отвертка в руке — это аксессуар.", "Люди почему-то считают, что блондинка обязана бояться кнопок. Очень удобно для них.", "Я могу заменить ролик, почистить контакты и вернуть ему чувство собственного достоинства.", "Но если кто-то спросит, скажи: он ожил от моего маникюра.", "Иначе шеф снова попросит меня чинить всё, что у него не подписывается.", "Ты ведь никому не расскажешь, что я спасла твой принтер?", "Особенно Игорю. Он и так слишком много умеет за одну зарплату."],
+        ["Кто опять говорит, что я беру еду из холодильника? Клевета с запахом котлет.", "Я не ем чужие обеды. Я провожу внезапную проверку продовольственной безопасности.", "Сегодня там был контейнер с подписью «Игорь». Очень подозрительно щедрая подпись.", "Я взял только одну вилку. Вилка ведь не считается едой?", "Люди должны подписывать контейнеры мельче, если хотят сохранить содержимое.", "А если в холодильнике пусто — это признак оптимизации запасов.", "Ты же понимаешь: руководитель не может ходить голодным?", "И ты не видел, как я прятал салат за папкой «Стратегия», верно?"],
+        ["Иногда я думаю открыть киоск. Маленький, честный. С ручками.", "Не с этими офисными. Те будут только для стартового капитала и моральной компенсации.", "Назову его «Игорь и точка». Или «Ручная работа». Пока выбираю между мечтой и судебным иском.", "Там будет кофе, тетради и табличка «срочное не принимаем».", "Каждый покупатель получит чек. В отличие от моих текущих задач.", "Лена сказала, что мне нужен фирменный цвет. Я выбрал цвет выгорания.", "Как думаешь, киоск с ручками — это план или крик о помощи?", "Если получится, я возьму тебя в партнёры. Ты будешь отвечать за слово «нет»."],
+        ["До охраны я тоже работал в офисе. Недолго и с последствиями.", "Сидел за офисную кражу. Формально — за один системный блок. Морально — за попытку его спасти.", "Он стоял в списании, я решил, что это почти просьба забрать его домой.", "Судья не оценил формулировку «эвакуация техники».", "Зато теперь я умею отличать камеру наблюдения от выключенного датчика.", "И знаю: если хочешь что-то унести, сначала спроси. Особенно у самого себя.", "Ты ведь не думаешь, что я снова за старое?", "Фонарик я купил сам. Честно. Почти." ]
+      ];
+      const firstDialogueChoices = [
+        [["Кашемир — почти офисная необходимость. Особенно в этом офисе.", "Мне кажется, у кредитки уже есть адвокат."], ["Ты лучше их всех — даже лучше корпоративной кредитки.", "Я уже вижу, как это попадёт в служебную записку."]],
+        [["С такой уверенностью вы и правда выглядите как человек с настоящим креслом.", "Если полиция спросит, я слишком занят принтером."], ["Конечно. Вы же самый убедительный человек с чужой подписью.", "Мне кажется, полиция любит такие истории."]],
+        [["За дверью выход, а не новый отчёт. Это уже неплохо.", "Может, сначала закрой восемь вкладок с чужими задачами?"], ["Да, выбери себя: ты полезнее этого принтера, и он хотя бы выключается.", "Не выбирай себе ничего начинать — тебе и так хватит."]],
+        [["Верю. После ночной смены здесь и не такое объяснение подходит.", "Если это НЛО, пусть они сначала заполнят журнал посетителей."], ["Верю. В этом офисе НЛО — не самая странная версия.", "Мне пора к компьютеру, а тебе — к инопланетянам."]]
+      ];
+      const secondDialogueChoices = [
+        [["Это не маникюр, это инженерное образование с блёстками.", "Конечно, принтер починился сам. Как и мой дедлайн."], ["Твой секрет в безопасности: я даже буду называть тебя сервисным центром.", "Я уже отправил заявку в службу поддержки: «поблагодарить неизвестную блондинку»." ]],
+        [["Проверка котлет — важная управленческая функция.", "Вы правы: салат под папкой гораздо стратегичнее."], ["Конечно, вы не голодны. Вы просто оптимизируете обеды.", "Я ничего не видел. Но холодильник готов дать показания."]],
+        [["Это бизнес-план. Особенно пункт про слово «нет».", "Это крик о помощи, но очень хорошо оформленный."], ["Я в деле. Буду отгонять срочные задачи от витрины.", "Сначала перестань воровать ручки, потом открывай музей ручек."]],
+        [["Это была не кража, а несогласованная забота о технике.", "Системный блок просто не хотел домой, Николай."], ["Не думаю. Но фонарик лучше всё-таки не прятать в рукаве.", "«Почти» — самое тревожное слово в охране."]]
+      ];
+      const openingLines = [
+        "Надо же, говорят, старые досье разлетелись. Но ты ведь не суёшь свой любопытный нос туда, куда не хотят, правда?",
+        "Вот и узнаем, кто у нас неоптимизированный элемент.",
+        "О боже, там досье разлетелись! Кто же что узнает? Но про меня-то точно нечего узнавать. Совсем нечего.",
+        "Старые досье разлетелись. Ты смотри, мне не балуй — бумаги и без тебя любят улетать не туда."
+      ];
+      const openingPortraitIsPositive = [true, true, false, false];
+      const openingEmployeeIndex = Math.floor(Math.random() * employees.length);
       const igorPensFact = "Ворует ручки компании и перепродаёт их, но зарабатывает слишком мало даже на кофе.";
       const guardPensFact = "Знает про ручки Игоря, но ему совершенно наплевать.";
 
@@ -567,9 +604,108 @@
       let musicFadeFrame = 0;
       let dragUpdateFrame = 0;
       let carriedLayoutFrame = 0;
+      let savedRunAvailable = false;
+      let hasStoredProgress = false;
+      let restoredSheets = [];
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
+      }
+
+      function restoreNumbers(target, source, maximum = Infinity) {
+        if (!Array.isArray(source)) return;
+        target.forEach((value, index) => {
+          const restored = Number(source[index]);
+          if (Number.isFinite(restored)) target[index] = Math.max(0, Math.min(restored, maximum));
+        });
+      }
+
+      function saveProgress() {
+        try {
+          const shortestSide = Math.min(width, height) || 1;
+          const data = {
+            version: 1,
+            employeeScores,
+            employeeEarned,
+            employeeRunScores,
+            factsUnlocked,
+            affection,
+            factsAtLastReturn,
+            dialogueTriggered: dialogueTriggered.map(triggered => [...triggered]),
+            shownDialogues: shownDialogues.map(shown => [...shown]),
+            run: {
+              score,
+              activeFolder,
+              nextFolderChange,
+              spawnElapsed,
+              sheets: sheets.filter(sheet => !sheet.carried).map(sheet => ({
+                x: sheet.x / (width || 1),
+                y: sheet.y / (height || 1),
+                vx: sheet.vx / shortestSide,
+                vy: sheet.vy / shortestSide
+              }))
+            }
+          };
+          window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+        } catch {
+          // The game stays fully playable if storage is blocked by the browser.
+        }
+      }
+
+      function loadProgress() {
+        try {
+          const data = JSON.parse(window.localStorage.getItem(SAVE_KEY));
+          if (!data || data.version !== 1) return;
+          hasStoredProgress = true;
+          restoreNumbers(employeeScores, data.employeeScores);
+          restoreNumbers(employeeEarned, data.employeeEarned);
+          restoreNumbers(employeeRunScores, data.employeeRunScores);
+          restoreNumbers(factsUnlocked, data.factsUnlocked);
+          factsUnlocked.forEach((count, index) => { factsUnlocked[index] = Math.min(count, employees[index].facts.length); });
+          if (Array.isArray(data.affection)) {
+            data.affection.forEach((value, index) => {
+              const restored = Number(value);
+              if (Number.isFinite(restored)) affection[index] = Math.max(-10, Math.min(restored, 10));
+            });
+          }
+          restoreNumbers(factsAtLastReturn, data.factsAtLastReturn, employees[0].facts.length);
+          if (Array.isArray(data.dialogueTriggered)) {
+            data.dialogueTriggered.forEach((saved, index) => {
+              if (!Array.isArray(saved) || !dialogueTriggered[index]) return;
+              saved.filter(milestone => playableDialogueMilestones.includes(milestone)).forEach(milestone => dialogueTriggered[index].add(milestone));
+            });
+          }
+          if (Array.isArray(data.shownDialogues)) {
+            data.shownDialogues.forEach((saved, index) => {
+              if (!Array.isArray(saved) || !shownDialogues[index]) return;
+              saved.filter(milestone => playableDialogueMilestones.includes(milestone)).forEach(milestone => shownDialogues[index].add(milestone));
+            });
+          } else if (Array.isArray(data.shownDialogueEmployees)) {
+            data.shownDialogueEmployees.forEach(index => {
+              if (Number.isInteger(index) && employees[index]) shownDialogues[index].add(2);
+            });
+          }
+          const savedScore = Number(data.run?.score);
+          if (Number.isFinite(savedScore) && savedScore > 0 && savedScore < TARGET_SCORE) {
+            score = savedScore;
+            const savedFolder = Number(data.run.activeFolder);
+            if (Number.isInteger(savedFolder) && savedFolder >= 0 && savedFolder < 4) activeFolder = savedFolder;
+            const savedChange = Number(data.run.nextFolderChange);
+            if (Number.isFinite(savedChange) && savedChange > 0) nextFolderChange = savedChange;
+            const savedSpawnElapsed = Number(data.run.spawnElapsed);
+            if (Number.isFinite(savedSpawnElapsed) && savedSpawnElapsed >= 0) spawnElapsed = savedSpawnElapsed;
+            if (Array.isArray(data.run.sheets)) {
+              restoredSheets = data.run.sheets.filter(sheet =>
+                Number.isFinite(Number(sheet.x)) && Number.isFinite(Number(sheet.y)) &&
+                Number.isFinite(Number(sheet.vx)) && Number.isFinite(Number(sheet.vy))
+              ).slice(0, MAX_SHEETS);
+            }
+            savedRunAvailable = true;
+            startMission.textContent = "Продолжить смену";
+          }
+        } catch {
+          // A damaged or unavailable save is ignored rather than blocking the game.
+        }
       }
 
       function element(name, attributes = {}) {
@@ -578,6 +714,23 @@
           node.setAttribute(key, value);
         }
         return node;
+      }
+
+      function renderDialoguePortrait(employeeIndex, positive) {
+        const cellWidth = 443.5;
+        const cellHeight = 443.5;
+        const cellX = employeeIndex * cellWidth;
+        const cellY = positive ? 0 : cellHeight;
+        dialoguePortrait.setAttribute("viewBox", `0 0 ${cellWidth} ${cellHeight}`);
+        const clip = element("clipPath", { id: "dialogue-portrait-clip", clipPathUnits: "userSpaceOnUse" });
+        clip.append(element("rect", { x: 0, y: 0, width: cellWidth, height: cellHeight }));
+        const definitions = element("defs");
+        definitions.append(clip);
+        const image = element("image", {
+          href: "assets/dialogue-portraits.png", x: -cellX, y: -cellY, width: 1774, height: 887,
+          "clip-path": "url(#dialogue-portrait-clip)"
+        });
+        dialoguePortrait.replaceChildren(definitions, image);
       }
 
       function startAudio() {
@@ -870,13 +1023,14 @@
         });
       }
 
-      function createSheet() {
+      function createSheet(savedSheet = null) {
         if (state !== "playing" || sheets.length >= MAX_SHEETS || !width || !height) return;
         const size = unit * 1.38;
-        const x = width / 2 + randomBetween(-unit * 0.24, unit * 0.24);
-        const y = height * .23 + randomBetween(-unit * .08, unit * .08);
+        const shortestSide = Math.min(width, height);
+        const x = savedSheet ? Number(savedSheet.x) * width : width / 2 + randomBetween(-unit * 0.24, unit * 0.24);
+        const y = savedSheet ? Number(savedSheet.y) * height : height * .23 + randomBetween(-unit * .08, unit * .08);
         const direction = randomBetween(0, Math.PI * 2);
-        const speed = Math.min(width, height) * 0.18;
+        const speed = shortestSide * 0.18;
         const group = element("g", { class: "sheet", "aria-label": "Лист досье" });
         group.append(element("image", {
           href: "assets/secret-document.png", x: 0, y: 0, width: size, height: size * 1.22,
@@ -884,8 +1038,8 @@
         }));
         const sheet = {
           node: group, x, y, size,
-          vx: Math.cos(direction) * speed,
-          vy: Math.sin(direction) * speed
+          vx: savedSheet ? Number(savedSheet.vx) * shortestSide : Math.cos(direction) * speed,
+          vy: savedSheet ? Number(savedSheet.vy) * shortestSide : Math.sin(direction) * speed
         };
         group.addEventListener("pointerdown", event => beginDrag(event, sheet));
         sheets.push(sheet);
@@ -1093,6 +1247,7 @@
           employeeEarned[folderIndex] += points;
           employeeRunScores[folderIndex] += points;
           updateScore();
+          saveProgress();
           flashFolderSuccess(folder);
           for (const sheet of [...carriedSheets]) fileSheet(sheet, folder);
           if (score >= TARGET_SCORE) win();
@@ -1298,6 +1453,44 @@
           && isFactAvailable(employeeIndex, nextFact);
       }
 
+      function allAvailableFirstDialoguesSeen() {
+        return employees.every((employee, employeeIndex) =>
+          factsUnlocked[employeeIndex] < playableDialogueMilestones[0] || shownDialogues[employeeIndex].has(playableDialogueMilestones[0])
+        );
+      }
+
+      function markDialogueFact(row, employeeIndex, factIndex, text) {
+        const milestone = factIndex + 1;
+        if (!dialogueMilestones.includes(milestone)) return;
+        const bubble = document.createElement("span");
+        bubble.className = "dialogue-inline-icon";
+        bubble.textContent = "💬";
+        const isFutureDialogue = milestone === dialogueMilestones[2];
+        const isSeen = !isFutureDialogue && shownDialogues[employeeIndex].has(milestone);
+        const isUnlocked = factsUnlocked[employeeIndex] >= milestone;
+        let state = "locked";
+        let label = `Диалог на ${milestone}-м факте`;
+        if (isFutureDialogue) {
+          state = "future";
+          label = isUnlocked ? "Финальный диалог появится позже" : "Финальный диалог на 20-м факте";
+        } else if (isSeen) {
+          state = "completed";
+          label = "Диалог пройден";
+        } else if (!isUnlocked) {
+          state = "locked";
+        } else if (milestone === playableDialogueMilestones[1] && !allAvailableFirstDialoguesSeen()) {
+          state = "queued";
+          label = "Диалог в очереди";
+        } else {
+          state = "available";
+          label = "Диалог доступен";
+        }
+        row.classList.add("dialogue-fact", state);
+        bubble.title = label;
+        bubble.setAttribute("aria-label", label);
+        row.insertBefore(bubble, text);
+      }
+
       function renderFacts() {
         factsGrid.replaceChildren();
         factsScreen.classList.toggle("mobile-facts-mode", usesMobileFactsLayout());
@@ -1369,6 +1562,7 @@
             const text = document.createElement("span");
             text.textContent = unlocked ? fact : "Засекреченный факт";
             row.append(icon, text);
+            markDialogueFact(row, employeeIndex, factIndex, text);
             if (!unlocked && factIndex === factsUnlocked[employeeIndex]) {
               const cost = factCost(factIndex);
               const button = document.createElement("button");
@@ -1495,6 +1689,7 @@
           const text = document.createElement("span");
           text.textContent = unlocked ? fact : "Засекреченный факт";
           row.append(icon, text);
+          markDialogueFact(row, employeeIndex, factIndex, text);
           if (!unlocked && factIndex === factsUnlocked[employeeIndex]) {
             const cost = factCost(factIndex);
             const button = document.createElement("button");
@@ -1520,12 +1715,48 @@
         if (employeeScores[employeeIndex] < cost || factsUnlocked[employeeIndex] >= employees[employeeIndex].facts.length || !isFactAvailable(employeeIndex, factsUnlocked[employeeIndex])) return;
         employeeScores[employeeIndex] -= cost;
         factsUnlocked[employeeIndex] += 1;
+        saveProgress();
         renderFacts();
       }
 
-      function showDialogue(employeeIndex) {
-        shownDialogueEmployees.add(employeeIndex);
-        activeDialogue = { employeeIndex, panel: 0 };
+      function showOpeningDialogue(resume) {
+        const employeeIndex = openingEmployeeIndex;
+        openingDialogue = { employeeIndex, resume };
+        splash.hidden = true;
+        dialogueScreen.hidden = false;
+        dialoguePortrait.style.display = "block";
+        renderDialoguePortrait(employeeIndex, openingPortraitIsPositive[employeeIndex]);
+        dialogueName.textContent = employees[employeeIndex].name;
+        dialogueText.textContent = openingLines[employeeIndex];
+        dialogueActions.replaceChildren();
+        const next = document.createElement("button");
+        next.className = "dialogue-next";
+        next.type = "button";
+        next.textContent = "К разбору";
+        next.addEventListener("click", closeOpeningDialogue);
+        dialogueActions.append(next);
+        gameMusic.pause();
+        novelMusic.volume = 0;
+        if (novelMusic.paused) novelMusic.play().catch(() => {});
+        fadeNovelMusic(.18, 600);
+      }
+
+      function closeOpeningDialogue() {
+        if (!openingDialogue) return;
+        const { resume } = openingDialogue;
+        openingDialogue = null;
+        fadeNovelMusic(0, 240, () => {
+          novelMusic.pause();
+          dialogueScreen.hidden = true;
+          startGame({ resume });
+        });
+      }
+
+      function showDialogue(employeeIndex, milestone) {
+        shownDialogues[employeeIndex].add(milestone);
+        dialogueTriggered[employeeIndex].add(milestone);
+        saveProgress();
+        activeDialogue = { employeeIndex, milestone, panel: 0 };
         factsScreen.hidden = true;
         dialogueScreen.hidden = false;
         dialoguePortrait.style.display = "block";
@@ -1537,7 +1768,7 @@
       }
 
       function currentMaximumLove(employeeIndex) {
-        return factsUnlocked[employeeIndex] >= dialogueMilestones[0] ? 2 : 0;
+        return playableDialogueMilestones.reduce((total, milestone) => total + (factsUnlocked[employeeIndex] >= milestone ? 2 : 0), 0);
       }
 
       function showOfficeFate() {
@@ -1599,37 +1830,18 @@
       }
 
       function renderDialogue() {
-        const { employeeIndex, panel } = activeDialogue;
+        const { employeeIndex, milestone, panel } = activeDialogue;
         if (panel === 5) fadeNovelMusic(.09, 450);
         if (panel === 6) fadeNovelMusic(.045, 450);
         if (panel === 7) fadeNovelMusic(0, 450);
         const positive = affection[employeeIndex] >= 0;
-        const cellX = employeeIndex * 443.5;
-        const cellY = positive ? 0 : 443.5;
-        dialoguePortrait.setAttribute("viewBox", `${cellX} ${cellY} 443.5 443.5`);
-        dialoguePortrait.replaceChildren(element("image", { href: "assets/dialogue-portraits.png", x: 0, y: 0, width: 1774, height: 887 }));
+        renderDialoguePortrait(employeeIndex, positive);
         dialogueName.textContent = employees[employeeIndex].name;
-        dialogueText.textContent = dialogueLines[employeeIndex][panel];
+        const isSecondDialogue = milestone === playableDialogueMilestones[1];
+        dialogueText.textContent = (isSecondDialogue ? secondDialogueLines : dialogueLines)[employeeIndex][panel];
         dialogueActions.replaceChildren();
         if (panel === 3 || panel === 7) {
-          const choiceCopy = [
-            [
-              ["Кашемир — почти офисная необходимость. Особенно в этом офисе.", "Мне кажется, у кредитки уже есть адвокат."],
-              ["Ты лучше их всех — даже лучше корпоративной кредитки.", "Я уже вижу, как это попадёт в служебную записку."]
-            ],
-            [
-              ["С такой уверенностью вы и правда выглядите как человек с настоящим креслом.", "Если полиция спросит, я слишком занят принтером."],
-              ["Конечно. Вы же самый убедительный человек с чужой подписью.", "Мне кажется, полиция любит такие истории."]
-            ],
-            [
-              ["За дверью выход, а не новый отчёт. Это уже неплохо.", "Может, сначала закрой восемь вкладок с чужими задачами?"],
-              ["Да, выбери себя: ты полезнее этого принтера, и он хотя бы выключается.", "Не выбирай себе ничего начинать — тебе и так хватит."]
-            ],
-            [
-              ["Верю. После ночной смены здесь и не такое объяснение подходит.", "Если это НЛО, пусть они сначала заполнят журнал посетителей."],
-              ["Верю. В этом офисе НЛО — не самая странная версия.", "Мне пора к компьютеру, а тебе — к инопланетянам."]
-            ]
-          ][employeeIndex][panel === 3 ? 0 : 1];
+          const choiceCopy = (isSecondDialogue ? secondDialogueChoices : firstDialogueChoices)[employeeIndex][panel === 3 ? 0 : 1];
           const choices = document.createElement("div");
           choices.className = "dialogue-choices";
           const support = document.createElement("button");
@@ -1656,6 +1868,7 @@
 
       function chooseDialogue(supportive) {
         affection[activeDialogue.employeeIndex] += supportive ? 1 : -1;
+        saveProgress();
         if (activeDialogue.panel === 7) {
           fadeNovelMusic(0, 300, () => {
             novelMusic.pause();
@@ -1672,27 +1885,27 @@
       function returnToComputer() {
         const gains = factsUnlocked.map((count, index) => count - factsAtLastReturn[index]);
         const allLearnedTogether = gains.every(gain => gain >= 2);
-        const candidates = [];
+        const firstCandidates = [];
+        const secondCandidates = [];
         factsUnlocked.forEach((count, employeeIndex) => {
-          if (shownDialogueEmployees.has(employeeIndex)) return;
-          dialogueMilestones.forEach(milestone => {
-            if (count >= milestone && !dialogueTriggered[employeeIndex].has(milestone)) candidates.push({ employeeIndex, milestone });
-          });
+          const firstMilestone = playableDialogueMilestones[0];
+          const secondMilestone = playableDialogueMilestones[1];
+          if (count >= firstMilestone && !shownDialogues[employeeIndex].has(firstMilestone)) firstCandidates.push({ employeeIndex, milestone: firstMilestone });
+          if (count >= secondMilestone && !shownDialogues[employeeIndex].has(secondMilestone)) secondCandidates.push({ employeeIndex, milestone: secondMilestone });
         });
+        const candidates = firstCandidates.length ? firstCandidates : secondCandidates;
         factsUnlocked.forEach((count, index) => { factsAtLastReturn[index] = count; });
         if (allLearnedTogether) {
           const preferred = candidates.filter(item => gains[item.employeeIndex] >= 2);
           if (preferred.length) {
             const selected = preferred[Math.floor(Math.random() * preferred.length)];
-            dialogueTriggered[selected.employeeIndex].add(selected.milestone);
-            showDialogue(selected.employeeIndex);
+            showDialogue(selected.employeeIndex, selected.milestone);
             return;
           }
         }
         if (candidates.length) {
           const selected = candidates[Math.floor(Math.random() * candidates.length)];
-          dialogueTriggered[selected.employeeIndex].add(selected.milestone);
-          showDialogue(selected.employeeIndex);
+          showDialogue(selected.employeeIndex, selected.milestone);
           return;
         }
         if (factsUnlocked.every((count, index) => count === employees[index].facts.length)) {
@@ -1735,15 +1948,18 @@
         animationFrame = requestAnimationFrame(gameLoop);
       }
 
-      function startGame() {
+      function startGame({ resume = false } = {}) {
         if (animationFrame) cancelAnimationFrame(animationFrame);
         for (const sheet of sheets) sheet.node.remove();
         sheets.length = 0;
-        score = 0;
-        employeeRunScores.fill(0);
-        activeFolder = Math.floor(Math.random() * 4);
-        nextFolderChange = randomBetween(5, 15);
-        spawnElapsed = 0;
+        if (!resume) {
+          score = 0;
+          employeeRunScores.fill(0);
+          activeFolder = Math.floor(Math.random() * 4);
+          nextFolderChange = randomBetween(5, 15);
+          spawnElapsed = 0;
+          restoredSheets = [];
+        }
         previousFrame = 0;
         if (magnet) magnet.remove();
         magnet = null;
@@ -1765,14 +1981,22 @@
         factsScreen.hidden = true;
         fateScreen.hidden = true;
         calculateLayout();
+        if (resume && restoredSheets.length) {
+          const sheetsToRestore = restoredSheets;
+          restoredSheets = [];
+          sheetsToRestore.forEach(sheet => createSheet(sheet));
+        }
         updateScore();
+        savedRunAvailable = false;
+        startMission.textContent = "Начать смену";
+        saveProgress();
         animationFrame = requestAnimationFrame(gameLoop);
       }
 
       svg.addEventListener("pointermove", moveDraggedSheet);
       svg.addEventListener("pointerup", event => finishDrag(event));
       svg.addEventListener("pointercancel", event => finishDrag(event, true));
-      restartButton.addEventListener("click", startGame);
+      restartButton.addEventListener("click", () => startGame());
       backToComputer.addEventListener("click", returnToComputer);
       officeFate.addEventListener("click", showOfficeFate);
       backToDossiers.addEventListener("click", () => {
@@ -1780,8 +2004,18 @@
         factsScreen.hidden = false;
         renderFacts();
       });
-      startMission.addEventListener("click", startGame);
+      startMission.addEventListener("click", () => {
+        if (hasStoredProgress) {
+          startGame({ resume: savedRunAvailable });
+        } else {
+          showOpeningDialogue(false);
+        }
+      });
       dialogueScreen.addEventListener("click", event => {
+        if (openingDialogue) {
+          if (!event.target.closest("button")) closeOpeningDialogue();
+          return;
+        }
         if (!activeDialogue || event.target.closest("button") || activeDialogue.panel === 3 || activeDialogue.panel === 7) return;
         activeDialogue.panel += 1;
         renderDialogue();
@@ -1793,6 +2027,11 @@
         resizeTimer = window.setTimeout(calculateLayout, 80);
       });
 
+      window.addEventListener("pagehide", saveProgress);
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) saveProgress();
+      });
+      loadProgress();
       calculateLayout();
     })();
   </script>
