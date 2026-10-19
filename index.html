@@ -34,7 +34,9 @@
       background: #20252b;
       touch-action: none;
       user-select: none;
+      visibility: hidden;
     }
+    body.splash-ready #game { visibility: visible; }
 
     .sheet {
       cursor: grab;
@@ -177,8 +179,9 @@
       display: grid;
       place-items: end center;
       padding: clamp(20px, 5vw, 60px);
-      background: linear-gradient(180deg, rgb(5 12 22 / 18%), rgb(5 12 22 / 72%)), url("assets/office-splash.png") center / cover;
+      background: linear-gradient(180deg, #050c16, #050c16), url("assets/office-splash.png") center / cover;
     }
+    body.splash-ready .splash { background: linear-gradient(180deg, rgb(5 12 22 / 18%), rgb(5 12 22 / 72%)), url("assets/office-splash.png") center / cover; }
     .splash[hidden] { display: none; }
     .splash-card { max-width: 510px; text-align: center; color: #fff3d0; text-shadow: 0 3px 12px #101821; }
     .office-logo { display: inline-grid; margin: 0; transform: rotate(-2deg); color: #fff6d8; font-family: Georgia, serif; font-size: clamp(37px, 7vw, 70px); font-weight: 900; line-height: .78; letter-spacing: .03em; text-shadow: 0 4px 0 #8d402b, 0 8px 18px rgb(0 0 0 / 52%); }
@@ -428,6 +431,7 @@
       const TARGET_SCORE = 200;
       const MAX_SHEETS = 14;
       const SPAWN_INTERVAL = 1.65;
+      const SHEET_HEIGHT_RATIO = 1.5;
       const SAVE_KEY = "office-shapito-save-v1";
 
       let width = 0;
@@ -540,6 +544,33 @@
           "На всякий случай носит в кармане фонарик, свисток и записку «вернусь через световой год»."
         ] }
       ];
+      const cleaner = {
+        name: "Раиса Павловна — уборщица",
+        description: "Негласная хозяйка офиса, подъезда и всех секретов между ними.",
+        facts: [
+          "Знает всех наркоманов и проституток у каждого подъезда — по именам, привычкам и времени выноса мусора.",
+          "Крайне недовольна любым, кто приходит без сменки. Сменку носит только Игорь, и за это ему разрешено жить.",
+          "Подкармливает голубей завтраком, который шеф своровал и не доел, а пропажу привычно валит на Игоря.",
+          "У неё сорок кошек, и некоторые из них периодически приходят с ней в офис как на работу.",
+          "Лена прикрывает всех её кошек перед шефом: называет их «новым отделом по стресс-менеджменту».",
+          "Однажды шеф сделал Раисе Павловне замечание. Второй раз он решил, что здоровье дороже.",
+          "Может по следам на мокром полу понять, кто опоздал, кто соврал и кто ел в коридоре.",
+          "Хранит ключ от кладовки, запасной ключ от кабинета шефа и ключ, назначение которого помнит только она.",
+          "Считает, что офис без запаха хлорки и котлет не заслуживает называться офисом.",
+          "Каждое утро проводит перекличку швабр. Одна из них числится в отпуске с 2016 года.",
+          "Умеет выключить пожарную сигнализацию одним взглядом и словом «тихо».",
+          "Называет Александра Михайловича «мальчиком в пиджаке» — исключительно за спиной. Иногда прямо перед ним.",
+          "Однажды отмыла с пола чью-то стратегию, и компания стала работать заметно честнее.",
+          "Кот Барсик знает, где лежит печенье Николая, но хранит профессиональную тайну.",
+          "Собирает потерянные ручки Игоря в банку с надписью «на чёрный день и его киоск».",
+          "Уверена, что принтер ломается от плохой энергетики, и почему-то всегда оказывается права.",
+          "Слушает офисные разговоры только во время уборки — то есть всегда.",
+          "По пятницам оставляет на кухне пирожки. Никто не знает, откуда они, поэтому все едят осторожно и с благодарностью.",
+          "Её кошки однажды провели совещание в переговорной продуктивнее, чем руководство за месяц.",
+          "Говорит, что уйдёт на пенсию, когда этот офис научится попадать мусором в корзину. Пенсия пока подождёт."
+        ]
+      };
+      const cleanerPortraitIsHappy = Math.random() < .5;
       const dialogueLines = [
         ["Ты новенький, да? Отлично. Тогда ты ещё не знаешь, почему моя подруга перестала звонить.", "Один из бывших мужей слишком много с ней общался. Теперь он, к счастью, не общается ни с кем.", "Не смотри так. Я просто предпочитаю, чтобы предательство было аккуратно оформлено.", "Кстати, на кредитную карту организации отлично ложится кашемир. Это тоже рабочая необходимость.", "Ты ведь не станешь судить меня за маленькие способы пережить этот офис?", "Иногда я думаю, что дружба — это когда подруга не трогает твоих мужей. Хотя бы живых.", "Шеф не заметит счёт за платье. Он даже свой кабинет не замечает.", "Скажи честно: ты на моей стороне?"],
         ["Не нервничай. Полиция приходит сюда не по нашу душу. Наверное.", "Они ищут какого-то настоящего директора. Забавно, правда?", "Я всего лишь человек, который умеет говорить уверенно и ставить подпись под углом.", "Компания работает, зарплаты иногда приходят — значит, система жизнеспособна.", "Если кто-то спросит, скажи, что я был на стратегической встрече. Очень стратегической.", "У настоящего босса, говорят, были документы. У меня есть харизма.", "Полиция любит бумажки, а я люблю, когда их не находят.", "Ты ведь не станешь задавать лишних вопросов?"],
@@ -577,7 +608,7 @@
       const guardPensFact = "Знает про ручки Игоря, но ему совершенно наплевать.";
 
       function shuffleFacts() {
-        employees.forEach(employee => {
+        [...employees, cleaner].forEach(employee => {
           for (let index = employee.facts.length - 1; index > 0; index -= 1) {
             const swap = Math.floor(Math.random() * (index + 1));
             [employee.facts[index], employee.facts[swap]] = [employee.facts[swap], employee.facts[index]];
@@ -781,6 +812,64 @@
         dialoguePortrait.replaceChildren(definitions, image);
       }
 
+      function allCoreFactsKnown() {
+        return employees.every((employee, employeeIndex) => factsUnlocked[employeeIndex] === employee.facts.length);
+      }
+
+      function createCleanerPortrait(className = "facts-portrait") {
+        const portraitX = cleanerPortraitIsHappy ? 0 : 887;
+        const portrait = element("svg", {
+          class: className,
+          viewBox: "0 0 887 887",
+          preserveAspectRatio: "xMidYMax meet", "aria-hidden": "true"
+        });
+        const clip = element("clipPath", { id: "cleaner-portrait-clip", clipPathUnits: "userSpaceOnUse" });
+        clip.append(element("rect", { x: 0, y: 0, width: 887, height: 887 }));
+        const definitions = element("defs");
+        definitions.append(clip);
+        portrait.append(definitions, element("image", {
+          href: "assets/cleaner-portraits.png", x: -portraitX, y: 0, width: 1774, height: 887,
+          "clip-path": "url(#cleaner-portrait-clip)"
+        }));
+        return portrait;
+      }
+
+      function createCleanerFile() {
+        const file = document.createElement("section");
+        file.className = "employee-file";
+        const intro = document.createElement("div");
+        intro.className = "employee-intro";
+        const copy = document.createElement("div");
+        const heading = document.createElement("h2");
+        heading.textContent = cleaner.name;
+        const description = document.createElement("p");
+        description.className = "employee-description";
+        description.textContent = cleaner.description;
+        copy.append(heading, description);
+        intro.append(createCleanerPortrait(), copy);
+        const balance = document.createElement("p");
+        balance.className = "employee-balance";
+        balance.textContent = "Бонусное досье · доступ получен";
+        const recognition = document.createElement("p");
+        recognition.className = "recognition-label";
+        recognition.textContent = `Узнавание сотрудницы: ${cleaner.facts.length} / ${cleaner.facts.length}`;
+        const list = document.createElement("div");
+        list.className = "fact-list";
+        cleaner.facts.forEach(fact => {
+          const row = document.createElement("div");
+          row.className = "fact";
+          const icon = document.createElement("span");
+          icon.className = "fact-lock";
+          icon.textContent = "✓";
+          const text = document.createElement("span");
+          text.textContent = fact;
+          row.append(icon, text);
+          list.append(row);
+        });
+        file.append(intro, balance, recognition, list);
+        return file;
+      }
+
       function preloadImage(source) {
         return new Promise(resolve => {
           const image = new Image();
@@ -819,6 +908,7 @@
           gameAssetsPromise = Promise.all([
             preloadImage("assets/office-background-v2.png"),
             preloadImage("assets/employee-portraits-v3.png"),
+            preloadImage("assets/cleaner-portraits.png"),
             preloadImage("assets/secret-document.png")
           ]).then(() => undefined);
           warmAudio(gameMusic);
@@ -836,6 +926,7 @@
         ]);
         splashAssets.then(() => preloadGameAssets());
         Promise.all([splashAssets, minimumLoadingTime]).then(() => {
+          document.body.classList.add("splash-ready");
           startMission.disabled = false;
           startFresh.disabled = false;
         });
@@ -942,7 +1033,7 @@
         for (const sheet of sheets) {
           sheet.size = unit * 1.38;
           sheet.x = Math.min(width - sheet.size, Math.max(0, sheet.x));
-          sheet.y = Math.min(height - sheet.size * 1.22, Math.max(0, sheet.y));
+          sheet.y = Math.min(height - sheet.size * SHEET_HEIGHT_RATIO, Math.max(0, sheet.y));
           positionSheet(sheet);
         }
       }
@@ -1141,8 +1232,8 @@
         const speed = shortestSide * 0.18;
         const group = element("g", { class: "sheet", "aria-label": "Лист досье" });
         group.append(element("image", {
-          href: "assets/secret-document.png", x: 0, y: 0, width: size, height: size * 1.22,
-          preserveAspectRatio: "none"
+          href: "assets/secret-document.png", x: 0, y: 0, width: size, height: size * SHEET_HEIGHT_RATIO,
+          preserveAspectRatio: "xMidYMid meet"
         }));
         const sheet = {
           node: group, x, y, size,
@@ -1161,7 +1252,7 @@
       }
 
       function positionSheet(sheet, scale = 1, angle = 0) {
-        const rotation = angle ? ` rotate(${angle} ${sheet.size / 2} ${sheet.size * 0.61})` : "";
+        const rotation = angle ? ` rotate(${angle} ${sheet.size / 2} ${sheet.size * SHEET_HEIGHT_RATIO / 2})` : "";
         sheet.node.setAttribute("transform", `translate(${sheet.x} ${sheet.y}) scale(${scale})${rotation}`);
       }
 
@@ -1174,7 +1265,7 @@
           // A short fan keeps every collected sheet readable while leaving the pointer unobscured.
           const offset = (index - (count - 1) / 2) * unit * 0.12;
           const targetX = magnetX - sheet.size * scale / 2 + offset;
-          const targetY = magnetY - sheet.size * 1.22 * scale / 2 + Math.abs(offset) * 0.26 - unit * 0.13;
+          const targetY = magnetY - sheet.size * SHEET_HEIGHT_RATIO * scale / 2 + Math.abs(offset) * 0.26 - unit * 0.13;
           const joining = Math.min(1, (performance.now() - sheet.capturedAt) / 170);
           const eased = 1 - Math.pow(1 - joining, 3);
           sheet.x = sheet.captureX + (targetX - sheet.captureX) * eased;
@@ -1230,7 +1321,7 @@
           const left = sheet.x;
           const top = sheet.y;
           const right = left + sheet.size;
-          const bottom = top + sheet.size * 1.22;
+          const bottom = top + sheet.size * SHEET_HEIGHT_RATIO;
           const nearestX = Math.max(left, Math.min(magnetX, right));
           const nearestY = Math.max(top, Math.min(magnetY, bottom));
           const dx = magnetX - nearestX;
@@ -1386,7 +1477,7 @@
       function isTutorialSheetVisible(sheet) {
         if (!sheet || sheet.carried || !sheets.includes(sheet)) return false;
         const sheetRight = sheet.x + sheet.size;
-        const sheetBottom = sheet.y + sheet.size * 1.22;
+        const sheetBottom = sheet.y + sheet.size * SHEET_HEIGHT_RATIO;
         return sheetRight > 0 && sheet.x < width && sheetBottom > 0 && sheet.y < height;
       }
 
@@ -1690,21 +1781,25 @@
         const knownFacts = factsUnlocked.reduce((total, count) => total + count, 0);
         const allFacts = employees.reduce((total, employee) => total + employee.facts.length, 0);
         const allKnown = knownFacts === allFacts;
-        ["Сотрудник №5?", "Ты?"].forEach((name, index) => {
+        if (allKnown) {
+          factsGrid.append(createCleanerFile());
+        } else {
           const mystery = document.createElement("section");
           mystery.className = "employee-file mystery-file";
           const mark = document.createElement("div");
           mark.className = "mystery-mark";
-          mark.textContent = allKnown ? "✦" : "?";
+          mark.textContent = "?";
           const heading = document.createElement("h2");
-          heading.textContent = allKnown ? `${name}: сигнал получен` : `${name}: засекречено`;
+          heading.textContent = "Сотрудник №5?: засекречено";
           const note = document.createElement("p");
-          note.textContent = allKnown
-            ? "Новое досье уже на подходе. Продолжение следует."
-            : `Откройте все факты: ${knownFacts} / ${allFacts}.`;
+          note.textContent = `Откройте все факты: ${knownFacts} / ${allFacts}.`;
           mystery.append(mark, heading, note);
           factsGrid.append(mystery);
-        });
+        }
+        const you = document.createElement("section");
+        you.className = "employee-file mystery-file";
+        you.innerHTML = "<div class=\"mystery-mark\">?</div><h2>Ты?: засекречено</h2><p>Эта папка ждёт следующей истории.</p>";
+        factsGrid.append(you);
       }
 
       function renderMobileFacts() {
@@ -1745,10 +1840,43 @@
             card.addEventListener("click", () => { mobileFactsEmployee = employeeIndex; renderFacts(); });
             factsGrid.append(card);
           });
-          const locked = document.createElement("section");
-          locked.className = "mobile-employee-card locked";
-          locked.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
-          factsGrid.append(locked);
+          if (allCoreFactsKnown()) {
+            const card = document.createElement("button");
+            card.className = "mobile-employee-card";
+            card.type = "button";
+            const title = document.createElement("h2");
+            title.textContent = "Раиса Павловна";
+            const known = document.createElement("p");
+            known.textContent = `Узнавание: ${cleaner.facts.length} / ${cleaner.facts.length}`;
+            const action = document.createElement("p");
+            action.className = "mobile-card-action";
+            action.textContent = "Открыть досье";
+            card.append(createCleanerPortrait(), title, known, action);
+            card.addEventListener("click", () => { mobileFactsEmployee = "cleaner"; renderFacts(); });
+            factsGrid.append(card);
+          } else {
+            const locked = document.createElement("section");
+            locked.className = "mobile-employee-card locked";
+            locked.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
+            factsGrid.append(locked);
+          }
+          return;
+        }
+
+        if (mobileFactsEmployee === "cleaner") {
+          const file = createCleanerFile();
+          const back = document.createElement("button");
+          back.className = "mobile-dossier-back";
+          back.type = "button";
+          back.textContent = "← К сотрудникам";
+          back.addEventListener("click", () => { mobileFactsEmployee = null; renderFacts(); });
+          const navigation = document.createElement("div");
+          navigation.className = "mobile-dossier-nav";
+          const label = document.createElement("strong");
+          label.textContent = "Бонусное досье";
+          navigation.append(back, label);
+          file.prepend(navigation);
+          factsGrid.append(file);
           return;
         }
 
@@ -1915,10 +2043,15 @@
           card.append(name, love);
           fateEmployees.append(card);
         });
-        const locked = document.createElement("section");
-        locked.className = "fate-employee locked";
-        locked.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
-        fateEmployees.append(locked);
+        const cleanerCard = document.createElement("section");
+        if (allCoreFactsKnown()) {
+          cleanerCard.className = "fate-employee";
+          cleanerCard.innerHTML = "<h2>Раиса Павловна</h2><p class=\"fate-love\">Личное досье открыто<strong>✦</strong></p>";
+        } else {
+          cleanerCard.className = "fate-employee locked";
+          cleanerCard.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
+        }
+        fateEmployees.append(cleanerCard);
         factsScreen.hidden = true;
         fateScreen.hidden = false;
       }
@@ -2054,7 +2187,7 @@
           positionSheet(sheet);
           if (
             sheet.x + sheet.size < 0 || sheet.x > width ||
-            sheet.y + sheet.size * 1.22 < 0 || sheet.y > height
+            sheet.y + sheet.size * SHEET_HEIGHT_RATIO < 0 || sheet.y > height
           ) {
             removeSheet(sheet);
           }
