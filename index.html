@@ -277,6 +277,23 @@
     .fact-button:disabled { background: #3d4c57; color: #87939b; cursor: not-allowed; }
     @media (max-width: 980px) { .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .facts-grid { grid-template-columns: 1fr; } .facts-head { align-items: flex-start; flex-direction: column; } .fate-employees { gap: 5px; } .fate-employee { min-height: 76px; padding: 7px; } .fate-employee h2 { font-size: 10px; } .fate-love { font-size: 10px; } .fate-love strong { font-size: 13px; } }
+    @media (hover: none) and (pointer: coarse) {
+      .facts-screen.mobile-facts-mode { padding: 12px; }
+      .mobile-facts-mode .facts-wrap { width: 100%; }
+      .mobile-facts-mode .facts-head { margin-bottom: 10px; }
+      .mobile-facts-mode .facts-head h1 { font-size: clamp(23px, 5vw, 32px); }
+      .mobile-facts-mode .facts-head p { display: none; }
+      .mobile-facts-mode .facts-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+      .mobile-employee-card { min-height: 175px; padding: 9px; border: 1px solid rgb(255 239 192 / 38%); border-radius: 14px; background: linear-gradient(145deg, rgb(49 37 31 / 96%), rgb(21 35 46 / 97%)); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+      .mobile-employee-card .facts-portrait { display: block; width: 55px; height: 55px; margin-bottom: 6px; }
+      .mobile-employee-card h2 { margin: 0; font-size: 13px; }
+      .mobile-employee-card p { margin: 6px 0 0; color: #d3e0e2; font-size: 11px; line-height: 1.2; }
+      .mobile-employee-card .mobile-card-score { color: #f3c86b; font-weight: 800; }
+      .mobile-employee-card.locked { display: grid; place-content: center; text-align: center; border-style: dashed; color: #9cabb1; cursor: default; }
+      .mobile-dossier-back { margin: 0 0 10px; border: 0; border-radius: 10px; padding: 9px 12px; background: #527d99; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+      .mobile-facts-mode .employee-file { grid-column: 1 / -1; max-width: 760px; margin: 0 auto; }
+      .mobile-facts-mode .fact-list { max-height: none; }
+    }
   </style>
 </head>
 <body>
@@ -399,6 +416,9 @@
       const dialogueTriggered = [new Set(), new Set(), new Set(), new Set()];
       const shownDialogueEmployees = new Set();
       let activeDialogue = null;
+      let mobileFactsEmployee = null;
+      let mobileFactsVisits = 0;
+      let mobileFactsSortKnownLast = false;
       const employees = [
         { name: "Лена — секретарь", description: "Королева маникюра и негласный диспетчер всех офисных катастроф.", facts: [
           "90% времени красит ногти, а оставшиеся 10% — спасает фирму.",
@@ -1207,13 +1227,27 @@
         if (animationFrame) cancelAnimationFrame(animationFrame);
         animationFrame = 0;
         gameMusic.pause();
+        if (usesMobileFactsLayout()) {
+          mobileFactsSortKnownLast = mobileFactsVisits > 0;
+          mobileFactsVisits += 1;
+          mobileFactsEmployee = null;
+        }
         renderFacts();
         factsScreen.hidden = false;
         backToComputer.focus();
       }
 
+      function usesMobileFactsLayout() {
+        return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      }
+
       function renderFacts() {
         factsGrid.replaceChildren();
+        factsScreen.classList.toggle("mobile-facts-mode", usesMobileFactsLayout());
+        if (usesMobileFactsLayout()) {
+          renderMobileFacts();
+          return;
+        }
         employees.forEach((employee, employeeIndex) => {
           const file = document.createElement("section");
           file.className = "employee-file";
@@ -1305,6 +1339,103 @@
           mystery.append(mark, heading, note);
           factsGrid.append(mystery);
         });
+      }
+
+      function renderMobileFacts() {
+        if (mobileFactsEmployee === null) {
+          employees.forEach((employee, employeeIndex) => {
+            const card = document.createElement("button");
+            card.className = "mobile-employee-card";
+            card.type = "button";
+            const portrait = element("svg", {
+              class: "facts-portrait",
+              viewBox: `${employeeIndex % 2 ? 630.5 : 0} ${employeeIndex > 1 ? 623.5 : 0} 630.5 623.5`,
+              preserveAspectRatio: "xMidYMax meet", "aria-hidden": "true"
+            });
+            portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
+            const title = document.createElement("h2");
+            title.textContent = employee.name.split(" — ")[0];
+            const score = document.createElement("p");
+            score.className = "mobile-card-score";
+            score.textContent = `Очки: ${employeeScores[employeeIndex]}`;
+            const known = document.createElement("p");
+            known.textContent = `Узнавание: ${factsUnlocked[employeeIndex]} / ${employee.facts.length}`;
+            const maximumLove = currentMaximumLove(employeeIndex);
+            const hearts = document.createElement("p");
+            hearts.textContent = maximumLove
+              ? `Отношение: ${"♥".repeat(Math.min(Math.max(affection[employeeIndex], 0), maximumLove))}${"♡".repeat(Math.max(maximumLove - Math.max(affection[employeeIndex], 0), 0))}`
+              : "Диалог пока закрыт";
+            card.append(portrait, title, score, known, hearts);
+            card.addEventListener("click", () => { mobileFactsEmployee = employeeIndex; renderFacts(); });
+            factsGrid.append(card);
+          });
+          const locked = document.createElement("section");
+          locked.className = "mobile-employee-card locked";
+          locked.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
+          factsGrid.append(locked);
+          return;
+        }
+
+        const employeeIndex = mobileFactsEmployee;
+        const employee = employees[employeeIndex];
+        const file = document.createElement("section");
+        file.className = "employee-file";
+        const back = document.createElement("button");
+        back.className = "mobile-dossier-back";
+        back.type = "button";
+        back.textContent = "← К сотрудникам";
+        back.addEventListener("click", () => { mobileFactsEmployee = null; renderFacts(); });
+        const intro = document.createElement("div");
+        intro.className = "employee-intro";
+        const portrait = element("svg", {
+          class: "facts-portrait",
+          viewBox: `${employeeIndex % 2 ? 630.5 : 0} ${employeeIndex > 1 ? 623.5 : 0} 630.5 623.5`,
+          preserveAspectRatio: "xMidYMax meet", "aria-hidden": "true"
+        });
+        portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
+        const copy = document.createElement("div");
+        const heading = document.createElement("h2");
+        heading.textContent = employee.name;
+        const description = document.createElement("p");
+        description.className = "employee-description";
+        description.textContent = employee.description;
+        copy.append(heading, description);
+        intro.append(portrait, copy);
+        const balance = document.createElement("p");
+        balance.className = "employee-balance";
+        balance.textContent = `Очки для досье: ${employeeScores[employeeIndex]}`;
+        const recognition = document.createElement("p");
+        recognition.className = "recognition-label";
+        recognition.textContent = `Узнавание сотрудника: ${factsUnlocked[employeeIndex]} / ${employee.facts.length}`;
+        const list = document.createElement("div");
+        list.className = "fact-list";
+        const facts = employee.facts.map((fact, factIndex) => ({ fact, factIndex }));
+        if (mobileFactsSortKnownLast) facts.sort((first, second) => Number(first.factIndex < factsUnlocked[employeeIndex]) - Number(second.factIndex < factsUnlocked[employeeIndex]));
+        facts.forEach(({ fact, factIndex }) => {
+          const unlocked = factIndex < factsUnlocked[employeeIndex];
+          const row = document.createElement("div");
+          row.className = `fact${unlocked ? "" : " locked"}`;
+          const icon = document.createElement("span");
+          icon.className = "fact-lock";
+          icon.textContent = unlocked ? "✓" : "🔒";
+          const text = document.createElement("span");
+          text.textContent = unlocked ? fact : "Засекреченный факт";
+          row.append(icon, text);
+          if (!unlocked && factIndex === factsUnlocked[employeeIndex]) {
+            const cost = factCost(factIndex);
+            const button = document.createElement("button");
+            button.className = "fact-button";
+            button.type = "button";
+            button.textContent = `Открыть · ${cost}`;
+            button.disabled = employeeScores[employeeIndex] < cost || !isFactAvailable(employeeIndex, factIndex);
+            if (!isFactAvailable(employeeIndex, factIndex)) button.textContent = "Сначала выясните про ручки Игоря";
+            button.addEventListener("click", () => unlockFact(employeeIndex));
+            row.append(button);
+          }
+          list.append(row);
+        });
+        file.append(back, intro, balance, recognition, list);
+        factsGrid.append(file);
       }
 
       function unlockFact(employeeIndex) {
