@@ -280,6 +280,7 @@
     @media (max-width: 980px) { .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .facts-grid { grid-template-columns: 1fr; } .facts-head { align-items: flex-start; flex-direction: column; } .fate-employees { gap: 5px; } .fate-employee { min-height: 76px; padding: 7px; } .fate-employee h2 { font-size: 10px; } .fate-love { font-size: 10px; } .fate-love strong { font-size: 13px; } }
     @media (hover: none) and (pointer: coarse) {
+      .carried-sheet { filter: none; }
       .facts-screen.mobile-facts-mode { padding: 12px; }
       .mobile-facts-mode .facts-wrap { width: 100%; }
       .mobile-facts-mode .facts-head { margin-bottom: 10px; }
@@ -564,6 +565,8 @@
       let tutorialArrow = null;
       let tutorialStartedAt = 0;
       let musicFadeFrame = 0;
+      let dragUpdateFrame = 0;
+      let carriedLayoutFrame = 0;
 
       function randomBetween(min, max) {
         return min + Math.random() * (max - min);
@@ -901,6 +904,7 @@
       }
 
       function positionCarriedSheets() {
+        carriedLayoutFrame = 0;
         const scale = 0.62;
         const count = carriedSheets.length;
         let settling = false;
@@ -916,7 +920,9 @@
           positionSheet(sheet, 1 + (scale - 1) * eased, offset / unit * 7 * eased);
           settling ||= joining < 1;
         }
-        if (settling && magnet) requestAnimationFrame(positionCarriedSheets);
+        if (settling && magnet && !carriedLayoutFrame) {
+          carriedLayoutFrame = requestAnimationFrame(positionCarriedSheets);
+        }
       }
 
       function createMagnet() {
@@ -950,7 +956,7 @@
         carriedSheets.push(sheet);
         playRustle();
         dragLayer.append(sheet.node);
-        positionCarriedSheets();
+        if (!carriedLayoutFrame) carriedLayoutFrame = requestAnimationFrame(positionCarriedSheets);
         dragLayer.append(magnet);
       }
 
@@ -989,9 +995,21 @@
 
       function moveDraggedSheet(event) {
         if (!magnet || event.pointerId !== draggedPointerId) return;
-        const point = svgPoint(event);
+        const coalesced = event.getCoalescedEvents?.();
+        const latestEvent = coalesced?.length ? coalesced[coalesced.length - 1] : event;
+        const point = svgPoint(latestEvent);
         magnetX = point.x;
         magnetY = point.y;
+        if (!dragUpdateFrame) dragUpdateFrame = requestAnimationFrame(updateDraggedSheet);
+      }
+
+      function updateDraggedSheet() {
+        dragUpdateFrame = 0;
+        if (!magnet) return;
+        if (carriedLayoutFrame) {
+          cancelAnimationFrame(carriedLayoutFrame);
+          carriedLayoutFrame = 0;
+        }
         positionCarriedSheets();
         magnetizeTouchingSheets();
         const folderIndex = folderAt(magnetX, magnetY);
@@ -1017,6 +1035,10 @@
         }
         magnet.remove();
         magnet = null;
+        if (dragUpdateFrame) cancelAnimationFrame(dragUpdateFrame);
+        if (carriedLayoutFrame) cancelAnimationFrame(carriedLayoutFrame);
+        dragUpdateFrame = 0;
+        carriedLayoutFrame = 0;
         carriedSheets = [];
         svg.classList.remove("magnet-active");
         draggedPointerId = null;
@@ -1081,6 +1103,10 @@
         const pointerId = draggedPointerId;
         magnet.remove();
         magnet = null;
+        if (dragUpdateFrame) cancelAnimationFrame(dragUpdateFrame);
+        if (carriedLayoutFrame) cancelAnimationFrame(carriedLayoutFrame);
+        dragUpdateFrame = 0;
+        carriedLayoutFrame = 0;
         carriedSheets = [];
         svg.classList.remove("magnet-active");
         draggedPointerId = null;
@@ -1721,6 +1747,10 @@
         previousFrame = 0;
         if (magnet) magnet.remove();
         magnet = null;
+        if (dragUpdateFrame) cancelAnimationFrame(dragUpdateFrame);
+        if (carriedLayoutFrame) cancelAnimationFrame(carriedLayoutFrame);
+        dragUpdateFrame = 0;
+        carriedLayoutFrame = 0;
         carriedSheets = [];
         draggedPointerId = null;
         svg.classList.remove("magnet-active");
