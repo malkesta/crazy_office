@@ -275,6 +275,8 @@
     .fact-lock { flex: 0 0 24px; text-align: center; }
     .fact-button { margin-left: auto; background: #5a8fc1; color: white; font-size: 12px; }
     .fact-button:disabled { background: #3d4c57; color: #87939b; cursor: not-allowed; }
+    .fact-alert { display: inline-grid; place-items: center; width: 19px; height: 19px; margin-left: 5px; border-radius: 50%; background: #f0c13c; color: #372208; font-size: 14px; font-weight: 1000; animation: fact-alert-pulse 1.1s ease-in-out infinite; }
+    @keyframes fact-alert-pulse { 0%,100% { transform: scale(.9); box-shadow: 0 0 0 rgb(240 193 60 / 0); } 50% { transform: scale(1.15); box-shadow: 0 0 13px rgb(255 218 93 / 90%); } }
     @media (max-width: 980px) { .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 700px) { .facts-grid { grid-template-columns: 1fr; } .facts-head { align-items: flex-start; flex-direction: column; } .fate-employees { gap: 5px; } .fate-employee { min-height: 76px; padding: 7px; } .fate-employee h2 { font-size: 10px; } .fate-love { font-size: 10px; } .fate-love strong { font-size: 13px; } }
     @media (hover: none) and (pointer: coarse) {
@@ -289,8 +291,15 @@
       .mobile-employee-card h2 { margin: 0; font-size: 13px; }
       .mobile-employee-card p { margin: 6px 0 0; color: #d3e0e2; font-size: 11px; line-height: 1.2; }
       .mobile-employee-card .mobile-card-score { color: #f3c86b; font-weight: 800; }
+      .mobile-card-action { display: inline-block; padding: 5px 7px; border-radius: 7px; background: #527d99; color: #fff !important; font-weight: 900; }
+      .mobile-fact-alert { position: absolute; top: 7px; right: 7px; }
+      .mobile-employee-card { position: relative; }
       .mobile-employee-card.locked { display: grid; place-content: center; text-align: center; border-style: dashed; color: #9cabb1; cursor: default; }
-      .mobile-dossier-back { margin: 0 0 10px; border: 0; border-radius: 10px; padding: 9px 12px; background: #527d99; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
+      .mobile-dossier-nav { position: sticky; z-index: 3; top: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: center; margin: -8px -8px 9px; padding: 8px; border-radius: 12px; background: linear-gradient(90deg, rgb(25 42 56 / 98%), rgb(45 36 30 / 96%)); box-shadow: 0 5px 14px rgb(0 0 0 / 30%); }
+      .mobile-dossier-nav .employee-intro { margin: 0; }
+      .mobile-dossier-nav .facts-portrait { width: 48px; height: 48px; }
+      .mobile-dossier-nav .employee-description { display: none; }
+      .mobile-dossier-back { margin: 0; border: 0; border-radius: 10px; padding: 9px 12px; background: #527d99; color: #fff; font: inherit; font-weight: 800; cursor: pointer; }
       .mobile-facts-mode .employee-file { grid-column: 1 / -1; max-width: 760px; margin: 0 auto; }
       .mobile-facts-mode .fact-list { max-height: none; }
     }
@@ -1256,6 +1265,13 @@
         return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
       }
 
+      function hasAvailableFact(employeeIndex) {
+        const nextFact = factsUnlocked[employeeIndex];
+        return nextFact < employees[employeeIndex].facts.length
+          && employeeScores[employeeIndex] >= factCost(nextFact)
+          && isFactAvailable(employeeIndex, nextFact);
+      }
+
       function renderFacts() {
         factsGrid.replaceChildren();
         factsScreen.classList.toggle("mobile-facts-mode", usesMobileFactsLayout());
@@ -1277,6 +1293,13 @@
           const introCopy = document.createElement("div");
           const heading = document.createElement("h2");
           heading.textContent = employee.name;
+          if (hasAvailableFact(employeeIndex)) {
+            const alert = document.createElement("span");
+            alert.className = "fact-alert";
+            alert.textContent = "!";
+            alert.title = "Можно открыть новый факт";
+            heading.append(alert);
+          }
           const description = document.createElement("p");
           description.className = "employee-description";
           description.textContent = employee.description;
@@ -1380,7 +1403,17 @@
             hearts.textContent = maximumLove
               ? `Отношение: ${"♥".repeat(Math.min(Math.max(affection[employeeIndex], 0), maximumLove))}${"♡".repeat(Math.max(maximumLove - Math.max(affection[employeeIndex], 0), 0))}`
               : "Диалог пока закрыт";
-            card.append(portrait, title, score, known, hearts);
+            const action = document.createElement("p");
+            action.className = "mobile-card-action";
+            action.textContent = "Узнать факты";
+            card.append(portrait, title, score, known, hearts, action);
+            if (hasAvailableFact(employeeIndex)) {
+              const alert = document.createElement("span");
+              alert.className = "fact-alert mobile-fact-alert";
+              alert.textContent = "!";
+              alert.title = "Можно открыть новый факт";
+              card.append(alert);
+            }
             card.addEventListener("click", () => { mobileFactsEmployee = employeeIndex; renderFacts(); });
             factsGrid.append(card);
           });
@@ -1449,7 +1482,10 @@
           }
           list.append(row);
         });
-        file.append(back, intro, balance, recognition, list);
+        const navigation = document.createElement("div");
+        navigation.className = "mobile-dossier-nav";
+        navigation.append(back, intro);
+        file.append(navigation, balance, recognition, list);
         factsGrid.append(file);
       }
 
