@@ -289,6 +289,14 @@
     .points-transfer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .points-transfer-button { border: 0; border-radius: 8px; padding: 7px 9px; background: #3b9b70; color: #f5fff8; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
     .points-transfer-button.cancel { background: #5e6b73; }
+    .points-choice { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgb(4 10 15 / 72%); }
+    .points-choice[hidden] { display: none; }
+    .points-choice-card { width: min(440px, 100%); padding: 24px; border: 2px solid #e5b55a; border-radius: 18px; background: linear-gradient(145deg, #243743, #15232d); box-shadow: 0 20px 55px rgb(0 0 0 / 50%); color: #fff4d8; text-align: center; }
+    .points-choice-card h2 { margin: 0 0 10px; font-size: 24px; }
+    .points-choice-card p { margin: 0 0 17px; line-height: 1.45; color: #d7e1df; }
+    .points-choice-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
+    .points-choice-actions button { border: 0; border-radius: 10px; padding: 10px 13px; background: #3b9b70; color: #f5fff8; font: inherit; font-weight: 800; cursor: pointer; }
+    .points-choice-actions .keep-points { background: #587184; }
     .fact.dialogue-fact { border: 1px solid rgb(132 160 173 / 48%); }
     .fact.dialogue-fact.available { border-color: #f2c85d; }
     .dialogue-inline-icon { display: inline-grid; flex: 0 0 auto; place-items: center; width: 20px; height: 18px; border: 1px solid currentColor; border-radius: 9px; color: #8fa3aa; font-size: 11px; line-height: 1; }
@@ -399,6 +407,18 @@
   <section id="fate-screen" class="fate-screen" hidden>
     <div class="fate-card"><h1>Судьба офиса</h1><p id="fate-text"></p><div id="fate-employees" class="fate-employees" aria-label="Отношение сотрудников"></div><button id="back-to-dossiers" class="facts-back" type="button">К досье</button></div>
   </section>
+  <section id="points-choice" class="points-choice" hidden aria-live="polite">
+    <div class="points-choice-card" role="dialog" aria-modal="true" aria-labelledby="points-choice-title">
+      <h2 id="points-choice-title">Папка «Ты» засекречена</h2>
+      <p id="points-choice-text"></p>
+      <div class="points-choice-actions">
+        <button id="give-points-to-cleaner" type="button">Передать уборщице</button>
+        <button id="keep-your-points" class="keep-points" type="button">Сохранить себе</button>
+      </div>
+    </div>
+  </section>
+  <script src="content/facts.js"></script>
+  <script src="content/dialogues.js"></script>
   <script>
     (() => {
       "use strict";
@@ -430,6 +450,10 @@
       const dialogueName = document.querySelector("#dialogue-name");
       const dialogueText = document.querySelector("#dialogue-text");
       const dialogueActions = document.querySelector("#dialogue-actions");
+      const pointsChoice = document.querySelector("#points-choice");
+      const pointsChoiceText = document.querySelector("#points-choice-text");
+      const givePointsToCleaner = document.querySelector("#give-points-to-cleaner");
+      const keepYourPoints = document.querySelector("#keep-your-points");
       const NS = "http://www.w3.org/2000/svg";
       const folders = [];
       const sheets = [];
@@ -446,6 +470,12 @@
       const employeeScores = [0, 0, 0, 0];
       const employeeEarned = [0, 0, 0, 0];
       const employeeRunScores = [0, 0, 0, 0];
+      let cleanerScore = 0;
+      let cleanerUnlocked = 0;
+      let cleanerAffection = 0;
+      let yourScore = 0;
+      const postCoreRunScores = [0, 0];
+      let pendingYourPoints = 0;
       const EMPLOYEE_TARGET = TARGET_SCORE / 4;
       const factsUnlocked = [0, 0, 0, 0];
       // Facts are unlocked in order, so this stores the boundary between the
@@ -454,155 +484,43 @@
       const affection = [0, 0, 0, 0];
       const factsAtLastReturn = [0, 0, 0, 0];
       const dialogueMilestones = [2, 10, 20];
-      const playableDialogueMilestones = dialogueMilestones.slice(0, 2);
+      const playableDialogueMilestones = dialogueMilestones;
       const dialogueTriggered = [new Set(), new Set(), new Set(), new Set()];
       const shownDialogues = [new Set(), new Set(), new Set(), new Set()];
+      const cleanerShownDialogues = new Set();
       let activeDialogue = null;
       let openingDialogue = null;
       let mobileFactsEmployee = null;
       let transferSource = null;
-      const employees = [
-        { name: "Лена — секретарь", description: "Королева маникюра и негласный диспетчер всех офисных катастроф.", facts: [
-          "90% времени красит ногти, а оставшиеся 10% — спасает фирму.",
-          "80% телефонного счёта компании — разговоры с подругой о маникюре.",
-          "Помнит все пароли, но выдаёт их только в обмен на шоколадку.",
-          "Её календарь забит «важными встречами», которые на самом деле записи в салон.",
-          "В критической ситуации её лак для ногтей работает как клей, маркер и аварийный ремонт.",
-          "У Лены было три мужа, и несколько из них умерло при весьма неудобных обстоятельствах.",
-          "Своих подруг она любит так сильно, что их голосовые сообщения слушает на двойной скорости.",
-          "Лена — страстная шопоголичка, но с деньгами у неё подозрительно всё хорошо.",
-          "Хранит в ящике стола запасные колготки, зарядки и план эвакуации из любой неловкой беседы.",
-          "Её подпись на открытках клиентам выглядит дороже, чем весь бюджет отдела.",
-          "Может определить настроение шефа по тому, как он закрывает холодильник.",
-          "Однажды оформила возврат за чужую ошибку так убедительно, что ей прислали благодарность.",
-          "Никто не знает, когда она работает, но без неё работа останавливается к обеду.",
-          "На столе держит фикус, который пережил четыре реорганизации и всех её мужей.",
-          "Умеет молчать в переговорной так выразительно, что люди сами начинают признавать ошибки.",
-          "Считает, что идеальный деловой костюм должен подходить к цвету лака.",
-          "Ведёт список должников, но отдаёт его только тем, кто принёс кофе.",
-          "Каждый понедельник обещает уйти из компании и каждый вторник спасает её от краха.",
-          "Её любимое слово — «срочно», хотя произносит она его только в исключительных случаях.",
-          "В её ящике есть папка «на всякий случай», а в ней — ещё шесть папок «на всякий случай»."
-        ] },
-        { name: "Александр Михайлович — шеф", description: "Главный специалист по экономии чужих ресурсов и объяснению необъяснимого.", facts: [
-          "Доедает еду сотрудников из холодильника и сваливает всё на самого занятого сотрудника.",
-          "Ведёт таблицу экономии, где отдельной строкой считает каждый лист туалетной бумаги.",
-          "Обещает премии так уверенно, будто бюджет уже существует.",
-          "Меняет приоритеты после каждого бизнес-подкаста, который слушает по дороге в офис.",
-          "На совещаниях говорит «оптимизируем», когда не знает, что делать дальше.",
-          "На самом деле он не имеет отношения к компании и просто однажды сел в свободное кресло шефа.",
-          "Настоящий босс сбежал, а этот человек стал ставить поддельные подписи — и никто не возражал, потому что работа шла.",
-          "Его решения принимают по привычке: они достаточно уверенно сказаны и никому не мешают работать.",
-          "Хранит на столе пустую папку «Стратегия», чтобы люди не задавали лишних вопросов.",
-          "Любит фразу «вернёмся к цифрам», хотя цифры обычно забывает дома.",
-          "Однажды сократил расходы на скрепки и назвал это антикризисной программой.",
-          "Секрет его авторитета — дорогая ручка, которую он нашёл в лифте.",
-          "Подписывает документы размашисто, потому что не уверен, как его фамилия пишется полностью.",
-          "Боится настоящих директоров больше, чем проверок и бухгалтерии вместе взятых.",
-          "Утром репетирует серьёзное лицо перед выключенным монитором.",
-          "Каждую чужую идею называет «именно тем, о чём я думал».",
-          "Считает, что кофе в офисе — это актив, а сотрудники — статья оптимизации.",
-          "Его визитка напечатана с ошибкой, но он говорит, что это элемент бренда.",
-          "В кризисной папке у него лежит только купон на скидку и салфетка.",
-          "На вопрос «кто вас назначил?» он всегда отвечает: «рынок»."
-        ] },
-        { name: "Игорь — самый занятый", description: "Тихий герой бэк-офиса: все дедлайны почему-то находят именно его.", facts: [
-          "Больше всего боится увольнения, хотя оно было бы лучшим решением для его физического и ментального здоровья.",
-          "Ворует ручки компании и перепродаёт их, но зарабатывает слишком мало даже на кофе.",
-          "Знает, где лежит каждый документ, потому что сам его когда-то создавал, правил и печатал.",
-          "Ставит в календарь напоминание «подышать» и почти всегда переносит его на завтра.",
-          "Однажды написал себе служебную записку: «не соглашаться на ещё одну срочную задачу».",
-          "Игорь — сотрудник месяца уже одиннадцатый месяц подряд, но никто не вручал ему эту награду.",
-          "Девушкам он почему-то не нравится; Игорь думает, что дело в деньгах, но дело совсем не в деньгах.",
-          "Его рабочий стол выглядит пустым только потому, что все бумаги уже открыты в двадцати вкладках.",
-          "Пьёт остывший кофе, потому что горячий всегда достаётся кому-то важнее.",
-          "Может починить принтер, но каждый раз делает вид, что не умеет.",
-          "Заявка на его отпуск лежит на согласовании с 2019 года.",
-          "У него есть шаблон письма «взял в работу», который спасал его чаще, чем сон.",
-          "В тайном блокноте рисует планы открыть киоск с канцелярией и никогда не видеть отчёты.",
-          "Знает все горячие клавиши, кроме той, которая выключает рабочий чат.",
-          "Коллеги зовут его «Игорёк, выручай» даже в лифте.",
-          "Однажды ответил на письмо во сне — и это был самый быстрый ответ отдела.",
-          "Его личный рекорд: семь срочных задач, начатых одновременно и законченных раньше срока.",
-          "Прячет в рюкзаке энергетический батончик на случай внепланового совещания.",
-          "Мечтает, чтобы его хотя бы раз спросили: «Игорь, тебе помочь?»",
-          "На его столе есть наклейка «это не моя задача», но она приклеена к чужому монитору."
-        ] },
-        { name: "Николай — охранник", description: "Усталый хранитель ключей, слухов и последней работающей розетки.", facts: [
-          "Знает про ручки Игоря, но ему совершенно наплевать.",
-          "Держит ключи от всех комнат и иногда прячется в серверной ради тишины.",
-          "Все слухи компании доходят до него раньше, чем до руководства.",
-          "Настроил автомат с напитками так, чтобы на ночной смене получать чай чуть крепче обычного.",
-          "Помнит лица всех курьеров, но не помнит, когда в последний раз нормально выспался.",
-          "Верит в НЛО, потому что его действительно похищали — просто ему никто не верит.",
-          "Описывает пришельцев так подробно, что бухгалтерия перестала спрашивать про ночные смены.",
-          "Ведёт журнал странных огней над парковкой и называет его «служебной документацией».",
-          "Однажды пропустил себя через турникет по гостевому пропуску и решил, что это знак.",
-          "Его фонарик пережил больше чрезвычайных ситуаций, чем офисный генератор.",
-          "Уверен, что камера в коридоре моргает ему в ответ.",
-          "Знает, какой сотрудник приходит раньше всех, но это знание никому не нужно.",
-          "В ночной тишине слушает радио с помехами и считает это переговорами с космосом.",
-          "Прячет печенье в будке охраны от шефа и почти никогда не делится.",
-          "Говорит, что может узнать инопланетянина по обуви, но пока проверяет только курьеров.",
-          "Его любимая смена — та, в которой никто не просит открыть склад.",
-          "Считает, что у компании есть призраки, но призраки хотя бы не опаздывают.",
-          "После похищения научился спать с одним открытым глазом и обеими закрытыми мыслями.",
-          "Никогда не увольняется: боится, что пришельцы будут искать его по старому месту работы.",
-          "На всякий случай носит в кармане фонарик, свисток и записку «вернусь через световой год»."
-        ] }
-      ];
-      const cleaner = {
-        name: "Раиса Павловна — уборщица",
-        description: "Негласная хозяйка офиса, подъезда и всех секретов между ними.",
-        facts: [
-          "Знает всех наркоманов и проституток у каждого подъезда — по именам, привычкам и времени выноса мусора.",
-          "Крайне недовольна любым, кто приходит без сменки. Сменку носит только Игорь, и за это ему разрешено жить.",
-          "Подкармливает голубей завтраком, который шеф своровал и не доел, а пропажу привычно валит на Игоря.",
-          "У неё сорок кошек, и некоторые из них периодически приходят с ней в офис как на работу.",
-          "Лена прикрывает всех её кошек перед шефом: называет их «новым отделом по стресс-менеджменту».",
-          "Однажды шеф сделал Раисе Павловне замечание. Второй раз он решил, что здоровье дороже.",
-          "Может по следам на мокром полу понять, кто опоздал, кто соврал и кто ел в коридоре.",
-          "Хранит ключ от кладовки, запасной ключ от кабинета шефа и ключ, назначение которого помнит только она.",
-          "Считает, что офис без запаха хлорки и котлет не заслуживает называться офисом.",
-          "Каждое утро проводит перекличку швабр. Одна из них числится в отпуске с 2016 года.",
-          "Умеет выключить пожарную сигнализацию одним взглядом и словом «тихо».",
-          "Называет Александра Михайловича «мальчиком в пиджаке» — исключительно за спиной. Иногда прямо перед ним.",
-          "Однажды отмыла с пола чью-то стратегию, и компания стала работать заметно честнее.",
-          "Кот Барсик знает, где лежит печенье Николая, но хранит профессиональную тайну.",
-          "Собирает потерянные ручки Игоря в банку с надписью «на чёрный день и его киоск».",
-          "Уверена, что принтер ломается от плохой энергетики, и почему-то всегда оказывается права.",
-          "Слушает офисные разговоры только во время уборки — то есть всегда.",
-          "По пятницам оставляет на кухне пирожки. Никто не знает, откуда они, поэтому все едят осторожно и с благодарностью.",
-          "Её кошки однажды провели совещание в переговорной продуктивнее, чем руководство за месяц.",
-          "Говорит, что уйдёт на пенсию, когда этот офис научится попадать мусором в корзину. Пенсия пока подождёт."
-        ]
-      };
+      const { employees, cleaner } = window.OFFICE_FACTS;
       const cleanerPortraitIsHappy = Math.random() < .5;
-      const dialogueLines = [
-        ["Ты новенький, да? Отлично. Тогда ты ещё не знаешь, почему моя подруга перестала звонить.", "Один из бывших мужей слишком много с ней общался. Теперь он, к счастью, не общается ни с кем.", "Не смотри так. Я просто предпочитаю, чтобы предательство было аккуратно оформлено.", "Кстати, на кредитную карту организации отлично ложится кашемир. Это тоже рабочая необходимость.", "Ты ведь не станешь судить меня за маленькие способы пережить этот офис?", "Иногда я думаю, что дружба — это когда подруга не трогает твоих мужей. Хотя бы живых.", "Шеф не заметит счёт за платье. Он даже свой кабинет не замечает.", "Скажи честно: ты на моей стороне?"],
-        ["Не нервничай. Полиция приходит сюда не по нашу душу. Наверное.", "Они ищут какого-то настоящего директора. Забавно, правда?", "Я всего лишь человек, который умеет говорить уверенно и ставить подпись под углом.", "Компания работает, зарплаты иногда приходят — значит, система жизнеспособна.", "Если кто-то спросит, скажи, что я был на стратегической встрече. Очень стратегической.", "У настоящего босса, говорят, были документы. У меня есть харизма.", "Полиция любит бумажки, а я люблю, когда их не находят.", "Ты ведь не станешь задавать лишних вопросов?"],
-        ["Ты тоже думаешь, что мне пора уходить? Все так думают, кроме меня.", "Я почти написал заявление. Потом пришло письмо с темой «срочно на пять минут».", "Девушкам я не нравлюсь. Наверное, из-за денег. Хотя денег у меня тоже нет.", "Знаешь, иногда страшнее всего открыть дверь, даже если за ней выход.", "Если я уйду, кто будет помнить пароль от принтера?", "Я хочу уйти. Очень. Но хочу, чтобы кто-то сказал, что мир не рухнет.", "Сегодня я закончил семь задач. Восьмая появилась, пока я это говорил.", "Как думаешь, мне правда можно выбрать себя?"],
-        ["Опять в коридоре свет мигал. Это либо проводка, либо они.", "Они забрали меня на три часа. Вернули с головной болью и идеей не спорить с космосом.", "Никто не верит. Даже когда я показываю им идеальную схему тарелки на парковке.", "Ты, кажется, умеешь слушать. Это редкость в этой компании.", "Я не боюсь НЛО. Я боюсь, что они вернутся и попросят отчёт о наших расходах.", "Если увидишь зелёный свет за окном — не маши. Один раз уже помахал.", "Я просто хочу, чтобы хоть кто-то сказал: «да, это могло случиться».", "Ты мне веришь?"
-        ]
-      ];
-      const secondDialogueLines = [
-        ["Принтер снова заработал. Сам. Как обычно, без моего участия.", "Нет, я не трогала его боковую крышку. И отвертка в руке — это аксессуар.", "Люди почему-то считают, что блондинка обязана бояться кнопок. Очень удобно для них.", "Я могу заменить ролик, почистить контакты и вернуть ему чувство собственного достоинства.", "Но если кто-то спросит, скажи: он ожил от моего маникюра.", "Иначе шеф снова попросит меня чинить всё, что у него не подписывается.", "Ты ведь никому не расскажешь, что я спасла твой принтер?", "Особенно Игорю. Он и так слишком много умеет за одну зарплату."],
-        ["Кто опять говорит, что я беру еду из холодильника? Клевета с запахом котлет.", "Я не ем чужие обеды. Я провожу внезапную проверку продовольственной безопасности.", "Сегодня там был контейнер с подписью «Игорь». Очень подозрительно щедрая подпись.", "Я взял только одну вилку. Вилка ведь не считается едой?", "Люди должны подписывать контейнеры мельче, если хотят сохранить содержимое.", "А если в холодильнике пусто — это признак оптимизации запасов.", "Ты же понимаешь: руководитель не может ходить голодным?", "И ты не видел, как я прятал салат за папкой «Стратегия», верно?"],
-        ["Иногда я думаю открыть киоск. Маленький, честный. С ручками.", "Не с этими офисными. Те будут только для стартового капитала и моральной компенсации.", "Назову его «Игорь и точка». Или «Ручная работа». Пока выбираю между мечтой и судебным иском.", "Там будет кофе, тетради и табличка «срочное не принимаем».", "Каждый покупатель получит чек. В отличие от моих текущих задач.", "Лена сказала, что мне нужен фирменный цвет. Я выбрал цвет выгорания.", "Как думаешь, киоск с ручками — это план или крик о помощи?", "Если получится, я возьму тебя в партнёры. Ты будешь отвечать за слово «нет»."],
-        ["До охраны я тоже работал в офисе. Недолго и с последствиями.", "Сидел за офисную кражу. Формально — за один системный блок. Морально — за попытку его спасти.", "Он стоял в списании, я решил, что это почти просьба забрать его домой.", "Судья не оценил формулировку «эвакуация техники».", "Зато теперь я умею отличать камеру наблюдения от выключенного датчика.", "И знаю: если хочешь что-то унести, сначала спроси. Особенно у самого себя.", "Ты ведь не думаешь, что я снова за старое?", "Фонарик я купил сам. Честно. Почти." ]
-      ];
-      const firstDialogueChoices = [
-        [["Кашемир — почти офисная необходимость. Особенно в этом офисе.", "Мне кажется, у кредитки уже есть адвокат."], ["Ты лучше их всех — даже лучше корпоративной кредитки.", "Я уже вижу, как это попадёт в служебную записку."]],
-        [["С такой уверенностью вы и правда выглядите как человек с настоящим креслом.", "Если полиция спросит, я слишком занят принтером."], ["Конечно. Вы же самый убедительный человек с чужой подписью.", "Мне кажется, полиция любит такие истории."]],
-        [["За дверью выход, а не новый отчёт. Это уже неплохо.", "Может, сначала закрой восемь вкладок с чужими задачами?"], ["Да, выбери себя: ты полезнее этого принтера, и он хотя бы выключается.", "Не выбирай себе ничего начинать — тебе и так хватит."]],
-        [["Верю. После ночной смены здесь и не такое объяснение подходит.", "Если это НЛО, пусть они сначала заполнят журнал посетителей."], ["Верю. В этом офисе НЛО — не самая странная версия.", "Мне пора к компьютеру, а тебе — к инопланетянам."]]
-      ];
-      const secondDialogueChoices = [
-        [["Это не маникюр, это инженерное образование с блёстками.", "Конечно, принтер починился сам. Как и мой дедлайн."], ["Твой секрет в безопасности: я даже буду называть тебя сервисным центром.", "Я уже отправил заявку в службу поддержки: «поблагодарить неизвестную блондинку»." ]],
-        [["Проверка котлет — важная управленческая функция.", "Вы правы: салат под папкой гораздо стратегичнее."], ["Конечно, вы не голодны. Вы просто оптимизируете обеды.", "Я ничего не видел. Но холодильник готов дать показания."]],
-        [["Это бизнес-план. Особенно пункт про слово «нет».", "Это крик о помощи, но очень хорошо оформленный."], ["Я в деле. Буду отгонять срочные задачи от витрины.", "Сначала перестань воровать ручки, потом открывай музей ручек."]],
-        [["Это была не кража, а несогласованная забота о технике.", "Системный блок просто не хотел домой, Николай."], ["Не думаю. Но фонарик лучше всё-таки не прятать в рукаве.", "«Почти» — самое тревожное слово в охране."]]
-      ];
+      const { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices } = window.OFFICE_DIALOGUES;
+
+      function validateContent() {
+        const employeeIds = ["lena", "boss", "igor", "guard"];
+        const dialogueSets = [dialogueLines, secondDialogueLines, finalDialogueLines];
+        const choiceSets = [firstDialogueChoices, secondDialogueChoices, finalDialogueChoices];
+        const validEmployees = Array.isArray(employees)
+          && employees.length === employeeIds.length
+          && employees.every((employee, index) => employee?.id === employeeIds[index]
+            && Array.isArray(employee.facts) && employee.facts.length === 20);
+        const validCleaner = cleaner?.id === "cleaner" && Array.isArray(cleaner.facts) && cleaner.facts.length === 20;
+        const validDialogueLines = dialogueSets.every(set => Array.isArray(set)
+          && set.length === employeeIds.length && set.every(lines => Array.isArray(lines) && lines.length === 8));
+        const validChoices = choiceSets.every(set => Array.isArray(set)
+          && set.length === employeeIds.length && set.every(choices => Array.isArray(choices)
+            && choices.length === 2 && choices.every(pair => Array.isArray(pair) && pair.length === 2)));
+        const validCleanerDialogues = Array.isArray(cleanerDialogueLines) && cleanerDialogueLines.length === 3
+          && cleanerDialogueLines.every(lines => Array.isArray(lines) && lines.length === 8)
+          && Array.isArray(cleanerDialogueChoices) && cleanerDialogueChoices.length === 3
+          && cleanerDialogueChoices.every(choices => Array.isArray(choices) && choices.length === 2
+            && choices.every(pair => Array.isArray(pair) && pair.length === 2));
+        if (!validEmployees || !validCleaner || !validDialogueLines || !validChoices || !validCleanerDialogues) {
+          throw new Error("Ошибка в content/: проверьте ID сотрудников, 20 фактов и 8 реплик в каждом диалоге.");
+        }
+      }
+      validateContent();
+
       const openingLines = [
         "Надо же, говорят, старые досье разлетелись. Но ты ведь не суёшь свой любопытный нос туда, куда не хотят, правда?",
         "Вот и узнаем, кто у нас неоптимизированный элемент.",
@@ -691,14 +609,21 @@
         employeeScores.fill(0);
         employeeEarned.fill(0);
         employeeRunScores.fill(0);
+        postCoreRunScores.fill(0);
         factsUnlocked.fill(0);
         factsReviewed.fill(0);
         factsAtLastReturn.fill(0);
         affection.fill(0);
+        cleanerScore = 0;
+        cleanerUnlocked = 0;
+        cleanerAffection = 0;
+        yourScore = 0;
+        pendingYourPoints = 0;
         dialogueTriggered.forEach(triggered => triggered.clear());
         shownDialogues.forEach(shown => shown.clear());
+        cleanerShownDialogues.clear();
         score = 0;
-        activeFolder = Math.floor(Math.random() * 4);
+        activeFolder = Math.floor(Math.random() * getGameplayFolders().length);
         nextFolderChange = randomBetween(5, 15);
         spawnElapsed = 0;
         savedRunAvailable = false;
@@ -713,16 +638,22 @@
         try {
           const shortestSide = Math.min(width, height) || 1;
           const data = {
-            version: 2,
+            version: 3,
             employeeScores,
             employeeEarned,
             employeeRunScores,
+            cleanerScore,
+            cleanerUnlocked,
+            cleanerAffection,
+            yourScore,
+            postCoreRunScores,
             factsUnlocked,
             factsReviewed,
             affection,
             factsAtLastReturn,
             dialogueTriggered: dialogueTriggered.map(triggered => [...triggered]),
             shownDialogues: shownDialogues.map(shown => [...shown]),
+            cleanerShownDialogues: [...cleanerShownDialogues],
             run: {
               score,
               activeFolder,
@@ -745,11 +676,16 @@
       function loadProgress() {
         try {
           const data = JSON.parse(window.localStorage.getItem(SAVE_KEY));
-          if (!data || ![1, 2].includes(data.version)) return;
+          if (!data || ![1, 2, 3].includes(data.version)) return;
           hasStoredProgress = true;
           restoreNumbers(employeeScores, data.employeeScores);
           restoreNumbers(employeeEarned, data.employeeEarned);
           restoreNumbers(employeeRunScores, data.employeeRunScores);
+          cleanerScore = Math.max(0, Number(data.cleanerScore) || 0);
+          cleanerUnlocked = Math.max(0, Math.min(Number(data.cleanerUnlocked) || 0, cleaner.facts.length));
+          cleanerAffection = Math.max(-6, Math.min(Number(data.cleanerAffection) || 0, 6));
+          yourScore = Math.max(0, Number(data.yourScore) || 0);
+          restoreNumbers(postCoreRunScores, data.postCoreRunScores);
           restoreNumbers(factsUnlocked, data.factsUnlocked);
           factsUnlocked.forEach((count, index) => { factsUnlocked[index] = Math.min(count, employees[index].facts.length); });
           // Save files from before v2 do not have this boundary. They were saved
@@ -782,11 +718,14 @@
               if (Number.isInteger(index) && employees[index]) shownDialogues[index].add(2);
             });
           }
+          if (Array.isArray(data.cleanerShownDialogues)) {
+            data.cleanerShownDialogues.filter(milestone => playableDialogueMilestones.includes(milestone)).forEach(milestone => cleanerShownDialogues.add(milestone));
+          }
           const savedScore = Number(data.run?.score);
           if (Number.isFinite(savedScore) && savedScore > 0 && savedScore < TARGET_SCORE) {
             score = savedScore;
             const savedFolder = Number(data.run.activeFolder);
-            if (Number.isInteger(savedFolder) && savedFolder >= 0 && savedFolder < 4) activeFolder = savedFolder;
+            if (Number.isInteger(savedFolder) && savedFolder >= 0 && savedFolder < getGameplayFolders().length) activeFolder = savedFolder;
             const savedChange = Number(data.run.nextFolderChange);
             if (Number.isFinite(savedChange) && savedChange > 0) nextFolderChange = savedChange;
             const savedSpawnElapsed = Number(data.run.spawnElapsed);
@@ -829,8 +768,37 @@
         dialoguePortrait.replaceChildren(definitions, image);
       }
 
+      function renderCleanerDialoguePortrait(positive) {
+        const portraitX = positive ? 0 : 887;
+        dialoguePortrait.setAttribute("viewBox", "0 0 887 887");
+        const clip = element("clipPath", { id: "cleaner-dialogue-portrait-clip", clipPathUnits: "userSpaceOnUse" });
+        clip.append(element("rect", { x: 0, y: 0, width: 887, height: 887 }));
+        const definitions = element("defs");
+        definitions.append(clip);
+        const image = element("image", {
+          href: "assets/cleaner-portraits.png", x: -portraitX, y: 0, width: 1774, height: 887,
+          "clip-path": "url(#cleaner-dialogue-portrait-clip)"
+        });
+        dialoguePortrait.replaceChildren(definitions, image);
+      }
+
       function allCoreFactsKnown() {
         return employees.every((employee, employeeIndex) => factsUnlocked[employeeIndex] === employee.facts.length);
+      }
+
+      function getGameplayFolders() {
+        if (allCoreFactsKnown()) {
+          return [
+            { id: "cleaner", label: "РАИСА", color: "#47736d" },
+            { id: "you", label: "ТЫ", color: "#5f6178" }
+          ];
+        }
+        return employees.map((employee, index) => ({
+          id: employee.id,
+          label: ["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"][index],
+          color: ["#8a6a52", "#7a6550", "#69765b", "#596d7a"][index],
+          employeeIndex: index
+        }));
       }
 
       function createCleanerPortrait(className = "facts-portrait") {
@@ -866,25 +834,64 @@
         intro.append(createCleanerPortrait(), copy);
         const balance = document.createElement("p");
         balance.className = "employee-balance";
-        balance.textContent = "Бонусное досье · доступ получен";
+        const relation = cleanerAffection > 0
+          ? "♥".repeat(Math.min(cleanerAffection, 6))
+          : cleanerAffection < 0 ? "💔".repeat(Math.min(Math.abs(cleanerAffection), 3)) : "♡";
+        const relationHearts = document.createElement("span");
+        relationHearts.className = `relation-hearts ${cleanerAffection > 0 ? "positive" : cleanerAffection < 0 ? "negative" : ""}`;
+        relationHearts.textContent = relation;
+        balance.append(`Очки для досье: ${cleanerScore} · отношение: `, relationHearts);
         const recognition = document.createElement("p");
         recognition.className = "recognition-label";
-        recognition.textContent = `Узнавание сотрудницы: ${cleaner.facts.length} / ${cleaner.facts.length}`;
+        recognition.textContent = "Узнавание сотрудницы";
+        const pointsRow = document.createElement("div");
+        pointsRow.className = "points-row";
+        const pointsTrack = document.createElement("div");
+        pointsTrack.className = "points-track";
+        const pointsFill = document.createElement("span");
+        pointsFill.className = "points-fill";
+        pointsFill.style.width = `${cleanerUnlocked / cleaner.facts.length * 100}%`;
+        pointsTrack.append(pointsFill);
+        const pointsNumber = document.createElement("span");
+        pointsNumber.className = "points-number";
+        pointsNumber.textContent = `${cleanerUnlocked} / ${cleaner.facts.length}`;
+        pointsRow.append(pointsTrack, pointsNumber);
         const list = document.createElement("div");
         list.className = "fact-list";
-        cleaner.facts.forEach(fact => {
+        cleaner.facts.forEach((fact, factIndex) => {
           const row = document.createElement("div");
-          row.className = "fact";
+          const unlocked = factIndex < cleanerUnlocked;
+          row.className = `fact${unlocked ? "" : " locked"}`;
           const icon = document.createElement("span");
           icon.className = "fact-lock";
-          icon.textContent = "✓";
+          icon.textContent = unlocked ? "✓" : "🔒";
           const text = document.createElement("span");
-          text.textContent = fact;
+          text.textContent = unlocked ? fact : "Засекреченный факт";
           row.append(icon, text);
+          markCleanerDialogueFact(row, factIndex, text);
+          if (!unlocked && factIndex === cleanerUnlocked) {
+            const cost = factCost(factIndex);
+            const button = document.createElement("button");
+            button.className = "fact-button";
+            button.type = "button";
+            button.textContent = `Открыть · ${cost}`;
+            button.disabled = cleanerScore < cost;
+            button.addEventListener("click", unlockCleanerFact);
+            row.append(button);
+          }
           list.append(row);
         });
-        file.append(intro, balance, recognition, list);
+        file.append(intro, balance, recognition, pointsRow, list);
         return file;
+      }
+
+      function unlockCleanerFact() {
+        const cost = factCost(cleanerUnlocked);
+        if (cleanerScore < cost || cleanerUnlocked >= cleaner.facts.length) return;
+        cleanerScore -= cost;
+        cleanerUnlocked += 1;
+        saveProgress();
+        renderFacts();
       }
 
       function preloadImage(source) {
@@ -1092,16 +1099,19 @@
           element("rect", { x: progressX, y: progressY, width: progressW, height: scoreHeight * .32, rx: unit * .08, fill: "#40505a" }),
           element("rect", { id: "progress-fill", x: progressX, y: progressY, width: progressW * Math.min(score / TARGET_SCORE, 1), height: scoreHeight * .32, rx: unit * .08, fill: "#66cd91" })
         );
-        const employees = ["ЛЕНА", "АЛЕКСАНДР М.", "ИГОРЬ", "НИКОЛАЙ"];
-        const barColors = ["#f39cad", "#d5a04d", "#8ac77f", "#77a8da"];
-        employees.forEach((name, index) => {
+        const postCore = allCoreFactsKnown();
+        const names = postCore ? ["РАИСА", "ТЫ · СЕКРЕТНО"] : ["ЛЕНА", "АЛЕКСАНДР М.", "ИГОРЬ", "НИКОЛАЙ"];
+        const runScores = postCore ? postCoreRunScores : employeeRunScores;
+        const barColors = postCore ? ["#6fc7a2", "#8e9cc7"] : ["#f39cad", "#d5a04d", "#8ac77f", "#77a8da"];
+        const folderTarget = TARGET_SCORE / names.length;
+        names.forEach((name, index) => {
           const y = scoreY + scoreHeight + unit * (.16 + index * .2);
           hud.append(
             element("text", { id: `employee-score-${index}`, x: scoreX + unit * .16, y: y + unit * .105, fill: "#f6e7c1", "font-size": unit * .115, "font-weight": "800", "letter-spacing": ".5" }),
             element("rect", { x: scoreX + unit * .92, y, width: scoreWidth - unit * 1.1, height: unit * .11, rx: unit * .04, fill: "#40505a" }),
-            element("rect", { id: `employee-progress-${index}`, x: scoreX + unit * .92, y, width: (scoreWidth - unit * 1.1) * Math.min(employeeRunScores[index] / EMPLOYEE_TARGET, 1), height: unit * .11, rx: unit * .04, fill: barColors[index] })
+            element("rect", { id: `employee-progress-${index}`, x: scoreX + unit * .92, y, width: (scoreWidth - unit * 1.1) * Math.min(runScores[index] / folderTarget, 1), height: unit * .11, rx: unit * .04, fill: barColors[index] })
           );
-          document.querySelector(`#employee-score-${index}`).textContent = `${name}  ${employeeRunScores[index]} / ${EMPLOYEE_TARGET}`;
+          document.querySelector(`#employee-score-${index}`).textContent = `${name}  ${runScores[index]} / ${folderTarget}`;
         });
 
       }
@@ -1143,7 +1153,10 @@
         );
       }
 
-      function folderPosition(index) {
+      function folderPosition(index, count) {
+        if (count === 2) {
+          return { x: width * (index === 0 ? .31 : .69), y: height - unit * 1.2 };
+        }
         if (width >= unit * 8.5) {
           return { x: width * (0.125 + index * 0.25), y: height - unit * 1.2 };
         }
@@ -1160,21 +1173,21 @@
         folders.length = 0;
         const folderW = unit * 2.05;
         const folderH = unit * 1.36;
-        const colors = ["#8a6a52", "#7a6550", "#69765b", "#596d7a"];
-        for (let i = 0; i < 4; i += 1) {
-          const { x, y } = folderPosition(i);
-          const group = element("g", { "data-folder": i, style: `--folder-color: ${colors[i]}` });
+        const gameplayFolders = getGameplayFolders();
+        gameplayFolders.forEach((folderData, i) => {
+          const { x, y } = folderPosition(i, gameplayFolders.length);
+          const group = element("g", { "data-folder": i, style: `--folder-color: ${folderData.color}` });
           const glow = element("ellipse", {
             cx: x, cy: y + folderH * 0.18, rx: folderW * 0.67, ry: folderH * 0.67,
             class: "folder-glow", fill: "#f0bd47", opacity: "0", filter: "url(#folder-glow)"
           });
           const back = element("path", {
             d: `M${x - folderW / 2} ${y - folderH * 0.35}h${folderW * 0.38}l${folderW * 0.13} ${folderH * 0.18}h${folderW * 0.49}v${folderH * 0.8}h-${folderW}z`,
-            class: "folder-back", rx: unit * 0.1, fill: colors[i]
+            class: "folder-back", rx: unit * 0.1, fill: folderData.color
           });
           const front = element("path", {
             d: `M${x - folderW * 0.5} ${y - folderH * 0.05}q0 -${folderH * 0.12} ${folderW * 0.13} -${folderH * 0.12}h${folderW * 0.87}v${folderH * 0.72}q0 ${folderH * 0.12} -${folderW * 0.13} ${folderH * 0.12}h-${folderW * 0.74}q-${folderW * 0.13} 0 -${folderW * 0.13} -${folderH * 0.12}z`,
-            class: "folder-front", fill: colors[i], stroke: "#fff", "stroke-opacity": ".25", "stroke-width": unit * 0.025
+            class: "folder-front", fill: folderData.color, stroke: "#fff", "stroke-opacity": ".25", "stroke-width": unit * 0.025
           });
           const number = element("text", {
             x, y: y + folderH * 0.31, "text-anchor": "middle",
@@ -1188,13 +1201,27 @@
             fill: "#f8e5bd", stroke: "#fff9e6", "stroke-width": unit * .035,
             filter: "url(#folder-glow)"
           }));
-          const portrait = element("svg", {
-            x: folderW * .025, y: folderH * .015, width: folderW * .61, height: folderH * .59,
-            viewBox: `${i % 2 ? 630.5 : 0} ${i > 1 ? 623.5 : 0} 630.5 623.5`, preserveAspectRatio: "xMidYMax meet",
-            "pointer-events": "none"
-          });
-          portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
-          portraitCard.append(portrait);
+          if (folderData.id === "cleaner") {
+            const portrait = createCleanerPortrait();
+            portrait.setAttribute("x", folderW * .025);
+            portrait.setAttribute("y", folderH * .015);
+            portrait.setAttribute("width", folderW * .61);
+            portrait.setAttribute("height", folderH * .59);
+            portraitCard.append(portrait);
+          } else if (folderData.id === "you") {
+            const secret = element("text", { x: folderW * .33, y: folderH * .45, "text-anchor": "middle", fill: "#354052", "font-size": folderH * .46, "font-weight": "900", "pointer-events": "none" });
+            secret.textContent = "?";
+            portraitCard.append(secret);
+          } else {
+            const employeeIndex = folderData.employeeIndex;
+            const portrait = element("svg", {
+              x: folderW * .025, y: folderH * .015, width: folderW * .61, height: folderH * .59,
+              viewBox: `${employeeIndex % 2 ? 630.5 : 0} ${employeeIndex > 1 ? 623.5 : 0} 630.5 623.5`, preserveAspectRatio: "xMidYMax meet",
+              "pointer-events": "none"
+            });
+            portrait.append(element("image", { href: "assets/employee-portraits-v3.png", x: 0, y: 0, width: 1261, height: 1247 }));
+            portraitCard.append(portrait);
+          }
           const status = element("text", {
             x, y: y - folderH * .58, "text-anchor": "middle", opacity: "0",
             "font-size": unit * .19, "font-weight": "900", "letter-spacing": ".7", "paint-order": "stroke",
@@ -1211,11 +1238,11 @@
               "font-size": unit * .15, "font-weight": "900", "letter-spacing": ".7"
             })
           );
-          activeMarker.lastElementChild.textContent = "ДОСЬЕ СЮДА!";
+          activeMarker.lastElementChild.textContent = `${folderData.label} СЮДА!`;
           group.append(glow, back, front, number, portraitCard, status, activeMarker);
           folderLayer.append(group);
-          folders.push({ x, y, width: folderW, height: folderH, group, glow, back, front, status });
-        }
+          folders.push({ x, y, width: folderW, height: folderH, group, glow, back, front, status, id: folderData.id });
+        });
         updateActiveFolder();
       }
 
@@ -1431,11 +1458,15 @@
         if (progressFill) {
           const scoreWidth = Math.min(width * .38, unit * 4.25);
           progressFill.setAttribute("width", (scoreWidth - unit * 1.68) * Math.min(score / TARGET_SCORE, 1));
-          for (let index = 0; index < employeeScores.length; index += 1) {
+          const postCore = allCoreFactsKnown();
+          const names = postCore ? ["РАИСА", "ТЫ · СЕКРЕТНО"] : ["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"];
+          const runScores = postCore ? postCoreRunScores : employeeRunScores;
+          const folderTarget = TARGET_SCORE / names.length;
+          for (let index = 0; index < names.length; index += 1) {
             const employeeBar = document.querySelector(`#employee-progress-${index}`);
-            if (employeeBar) employeeBar.setAttribute("width", (scoreWidth - unit * 1.1) * Math.min(employeeRunScores[index] / EMPLOYEE_TARGET, 1));
+            if (employeeBar) employeeBar.setAttribute("width", (scoreWidth - unit * 1.1) * Math.min(runScores[index] / folderTarget, 1));
             const employeeLabel = document.querySelector(`#employee-score-${index}`);
-            if (employeeLabel) employeeLabel.textContent = `${["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"][index]}  ${employeeRunScores[index]} / ${EMPLOYEE_TARGET}`;
+            if (employeeLabel) employeeLabel.textContent = `${names[index]}  ${runScores[index]} / ${folderTarget}`;
           }
         }
       }
@@ -1459,13 +1490,23 @@
         if (successful) {
           const points = carriedSheets.length * 5;
           score += points;
-          employeeScores[folderIndex] += points;
-          employeeEarned[folderIndex] += points;
-          employeeRunScores[folderIndex] += points;
+          if (allCoreFactsKnown()) {
+            postCoreRunScores[folderIndex] += points;
+            if (folder.id === "cleaner") cleanerScore += points;
+            if (folder.id === "you") {
+              yourScore += points;
+              pendingYourPoints += points;
+            }
+          } else {
+            employeeScores[folderIndex] += points;
+            employeeEarned[folderIndex] += points;
+            employeeRunScores[folderIndex] += points;
+          }
           updateScore();
           saveProgress();
           flashFolderSuccess(folder);
           for (const sheet of [...carriedSheets]) fileSheet(sheet, folder);
+          if (folder.id === "you") showYourPointsChoice();
           if (score >= TARGET_SCORE) win();
         } else {
           flashFolderError(folder);
@@ -1483,6 +1524,23 @@
         draggedPointerId = null;
         if (pointerId !== null && svg.hasPointerCapture(pointerId)) svg.releasePointerCapture(pointerId);
         window.setTimeout(() => { folderLocked = false; }, 120);
+      }
+
+      function showYourPointsChoice() {
+        if (!pendingYourPoints) return;
+        pointsChoiceText.textContent = `Получено очков: ${pendingYourPoints}. Папка «Ты» ещё засекречена: передать их Раисе Павловне или сохранить до следующей истории?`;
+        pointsChoice.hidden = false;
+        givePointsToCleaner.focus();
+      }
+
+      function resolveYourPoints(transfer) {
+        const points = Math.min(pendingYourPoints, yourScore);
+        if (transfer && points) cleanerScore += points;
+        if (transfer) yourScore -= points;
+        pendingYourPoints = 0;
+        pointsChoice.hidden = true;
+        saveProgress();
+        if (!factsScreen.hidden) renderFacts();
       }
 
       function removeSheet(sheet) {
@@ -1742,26 +1800,38 @@
         const bubble = document.createElement("span");
         bubble.className = "dialogue-inline-icon";
         bubble.textContent = "💬";
-        const isFutureDialogue = milestone === dialogueMilestones[2];
-        const isSeen = !isFutureDialogue && shownDialogues[employeeIndex].has(milestone);
+        const isSeen = shownDialogues[employeeIndex].has(milestone);
         const isUnlocked = factsUnlocked[employeeIndex] >= milestone;
         let state = "locked";
         let label = `Диалог на ${milestone}-м факте`;
-        if (isFutureDialogue) {
-          state = "future";
-          label = isUnlocked ? "Финальный диалог появится позже" : "Финальный диалог на 20-м факте";
-        } else if (isSeen) {
+        if (isSeen) {
           state = "completed";
           label = "Диалог пройден";
         } else if (!isUnlocked) {
           state = "locked";
-        } else if (milestone === playableDialogueMilestones[1] && !allAvailableFirstDialoguesSeen()) {
+        } else if (milestone === dialogueMilestones[1] && !allAvailableFirstDialoguesSeen()) {
           state = "queued";
           label = "Диалог в очереди";
         } else {
           state = "available";
           label = "Диалог доступен";
         }
+        row.classList.add("dialogue-fact", state);
+        bubble.title = label;
+        bubble.setAttribute("aria-label", label);
+        row.insertBefore(bubble, text);
+      }
+
+      function markCleanerDialogueFact(row, factIndex, text) {
+        const milestone = factIndex + 1;
+        if (!dialogueMilestones.includes(milestone)) return;
+        const bubble = document.createElement("span");
+        bubble.className = "dialogue-inline-icon";
+        bubble.textContent = "💬";
+        const isSeen = cleanerShownDialogues.has(milestone);
+        const isUnlocked = cleanerUnlocked >= milestone;
+        const state = isSeen ? "completed" : isUnlocked ? "available" : "locked";
+        const label = isSeen ? "Диалог пройден" : isUnlocked ? "Диалог доступен" : `Диалог на ${milestone}-м факте`;
         row.classList.add("dialogue-fact", state);
         bubble.title = label;
         bubble.setAttribute("aria-label", label);
@@ -1877,10 +1947,32 @@
           mystery.append(mark, heading, note);
           factsGrid.append(mystery);
         }
-        const you = document.createElement("section");
-        you.className = "employee-file mystery-file";
-        you.innerHTML = "<div class=\"mystery-mark\">?</div><h2>Ты?: засекречено</h2><p>Эта папка ждёт следующей истории.</p>";
-        factsGrid.append(you);
+        if (allKnown) {
+          const you = document.createElement("section");
+          you.className = "employee-file mystery-file";
+          const mark = document.createElement("div");
+          mark.className = "mystery-mark";
+          mark.textContent = "?";
+          const heading = document.createElement("h2");
+          heading.textContent = "Ты: засекречено";
+          const note = document.createElement("p");
+          note.textContent = `Очки в запасе: ${yourScore}. Их можно сохранить для будущей истории или передать Раисе Павловне.`;
+          you.append(mark, heading, note);
+          if (yourScore) {
+            const transfer = document.createElement("button");
+            transfer.className = "points-transfer-button";
+            transfer.type = "button";
+            transfer.textContent = "Передать уборщице";
+            transfer.addEventListener("click", () => {
+              cleanerScore += yourScore;
+              yourScore = 0;
+              saveProgress();
+              renderFacts();
+            });
+            you.append(transfer);
+          }
+          factsGrid.append(you);
+        }
       }
 
       function renderMobileFacts() {
@@ -1928,13 +2020,17 @@
             const title = document.createElement("h2");
             title.textContent = "Раиса Павловна";
             const known = document.createElement("p");
-            known.textContent = `Узнавание: ${cleaner.facts.length} / ${cleaner.facts.length}`;
+            known.textContent = `Узнавание: ${cleanerUnlocked} / ${cleaner.facts.length}`;
             const action = document.createElement("p");
             action.className = "mobile-card-action";
             action.textContent = "Открыть досье";
             card.append(createCleanerPortrait(), title, known, action);
             card.addEventListener("click", () => { mobileFactsEmployee = "cleaner"; renderFacts(); });
             factsGrid.append(card);
+            const you = document.createElement("section");
+            you.className = "mobile-employee-card locked";
+            you.innerHTML = `<h2>Ты: засекречено</h2><p>Очки в запасе: ${yourScore}</p>`;
+            factsGrid.append(you);
           } else {
             const locked = document.createElement("section");
             locked.className = "mobile-employee-card locked";
@@ -2084,8 +2180,12 @@
       }
 
       function showDialogue(employeeIndex, milestone) {
-        shownDialogues[employeeIndex].add(milestone);
-        dialogueTriggered[employeeIndex].add(milestone);
+        if (employeeIndex === "cleaner") {
+          cleanerShownDialogues.add(milestone);
+        } else {
+          shownDialogues[employeeIndex].add(milestone);
+          dialogueTriggered[employeeIndex].add(milestone);
+        }
         saveProgress();
         activeDialogue = { employeeIndex, milestone, panel: 0 };
         factsScreen.hidden = true;
@@ -2134,7 +2234,8 @@
         const cleanerCard = document.createElement("section");
         if (allCoreFactsKnown()) {
           cleanerCard.className = "fate-employee";
-          cleanerCard.innerHTML = "<h2>Раиса Павловна</h2><p class=\"fate-love\">Личное досье открыто<strong>✦</strong></p>";
+          const cleanerLove = Math.min(Math.max(cleanerAffection, 0), 6);
+          cleanerCard.innerHTML = `<h2>Раиса Павловна</h2><p class="fate-love">Отношение: ${cleanerLove} / 6<strong>${"♥".repeat(cleanerLove)}${"♡".repeat(6 - cleanerLove)}</strong></p>`;
         } else {
           cleanerCard.className = "fate-employee locked";
           cleanerCard.innerHTML = "<h2>Сотрудник №5?</h2><p>Заблокирован</p>";
@@ -2170,14 +2271,23 @@
         if (panel === 5) fadeNovelMusic(.09, 450);
         if (panel === 6) fadeNovelMusic(.045, 450);
         if (panel === 7) fadeNovelMusic(0, 450);
-        const positive = affection[employeeIndex] >= 0;
-        renderDialoguePortrait(employeeIndex, positive);
-        dialogueName.textContent = employees[employeeIndex].name;
-        const isSecondDialogue = milestone === playableDialogueMilestones[1];
-        dialogueText.textContent = (isSecondDialogue ? secondDialogueLines : dialogueLines)[employeeIndex][panel];
+        const isCleaner = employeeIndex === "cleaner";
+        const positive = isCleaner ? cleanerAffection >= 0 : affection[employeeIndex] >= 0;
+        if (isCleaner) renderCleanerDialoguePortrait(positive);
+        else renderDialoguePortrait(employeeIndex, positive);
+        dialogueName.textContent = isCleaner ? cleaner.name : employees[employeeIndex].name;
+        const isSecondDialogue = milestone === dialogueMilestones[1];
+        const isFinalDialogue = milestone === dialogueMilestones[2];
+        const lines = isCleaner
+          ? cleanerDialogueLines[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
+          : (isFinalDialogue ? finalDialogueLines : isSecondDialogue ? secondDialogueLines : dialogueLines)[employeeIndex];
+        dialogueText.textContent = lines[panel];
         dialogueActions.replaceChildren();
         if (panel === 3 || panel === 7) {
-          const choiceCopy = (isSecondDialogue ? secondDialogueChoices : firstDialogueChoices)[employeeIndex][panel === 3 ? 0 : 1];
+          const choicesByDialogue = isCleaner
+            ? cleanerDialogueChoices[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
+            : (isFinalDialogue ? finalDialogueChoices : isSecondDialogue ? secondDialogueChoices : firstDialogueChoices)[employeeIndex];
+          const choiceCopy = choicesByDialogue[panel === 3 ? 0 : 1];
           const choices = document.createElement("div");
           choices.className = "dialogue-choices";
           const support = document.createElement("button");
@@ -2203,7 +2313,8 @@
       }
 
       function chooseDialogue(supportive) {
-        affection[activeDialogue.employeeIndex] += supportive ? 1 : -1;
+        if (activeDialogue.employeeIndex === "cleaner") cleanerAffection += supportive ? 1 : -1;
+        else affection[activeDialogue.employeeIndex] += supportive ? 1 : -1;
         saveProgress();
         if (activeDialogue.panel === 7) {
           fadeNovelMusic(0, 300, () => {
@@ -2227,16 +2338,21 @@
         const allLearnedTogether = gains.every(gain => gain >= 2);
         const firstCandidates = [];
         const secondCandidates = [];
+        const finalCandidates = [];
         factsUnlocked.forEach((count, employeeIndex) => {
-          const firstMilestone = playableDialogueMilestones[0];
-          const secondMilestone = playableDialogueMilestones[1];
+          const [firstMilestone, secondMilestone, finalMilestone] = dialogueMilestones;
           if (count >= firstMilestone && !shownDialogues[employeeIndex].has(firstMilestone)) firstCandidates.push({ employeeIndex, milestone: firstMilestone });
           if (count >= secondMilestone && !shownDialogues[employeeIndex].has(secondMilestone)) secondCandidates.push({ employeeIndex, milestone: secondMilestone });
+          if (count >= finalMilestone && !shownDialogues[employeeIndex].has(finalMilestone)) finalCandidates.push({ employeeIndex, milestone: finalMilestone });
         });
-        const candidates = firstCandidates.length ? firstCandidates : secondCandidates;
+        const [firstMilestone, secondMilestone, finalMilestone] = dialogueMilestones;
+        if (cleanerUnlocked >= firstMilestone && !cleanerShownDialogues.has(firstMilestone)) firstCandidates.push({ employeeIndex: "cleaner", milestone: firstMilestone });
+        if (cleanerUnlocked >= secondMilestone && !cleanerShownDialogues.has(secondMilestone)) secondCandidates.push({ employeeIndex: "cleaner", milestone: secondMilestone });
+        if (cleanerUnlocked >= finalMilestone && !cleanerShownDialogues.has(finalMilestone)) finalCandidates.push({ employeeIndex: "cleaner", milestone: finalMilestone });
+        const candidates = firstCandidates.length ? firstCandidates : secondCandidates.length ? secondCandidates : finalCandidates;
         factsUnlocked.forEach((count, index) => { factsAtLastReturn[index] = count; });
         if (allLearnedTogether) {
-          const preferred = candidates.filter(item => gains[item.employeeIndex] >= 2);
+          const preferred = candidates.filter(item => item.employeeIndex !== "cleaner" && gains[item.employeeIndex] >= 2);
           if (preferred.length) {
             const selected = preferred[Math.floor(Math.random() * preferred.length)];
             showDialogue(selected.employeeIndex, selected.milestone);
@@ -2248,7 +2364,8 @@
           showDialogue(selected.employeeIndex, selected.milestone);
           return;
         }
-        if (factsUnlocked.every((count, index) => count === employees[index].facts.length)) {
+        if (factsUnlocked.every((count, index) => count === employees[index].facts.length)
+          && employees.every((employee, index) => shownDialogues[index].has(dialogueMilestones[2]))) {
           showEnding();
           return;
         }
@@ -2295,7 +2412,8 @@
         if (!resume) {
           score = 0;
           employeeRunScores.fill(0);
-          activeFolder = Math.floor(Math.random() * 4);
+          postCoreRunScores.fill(0);
+          activeFolder = Math.floor(Math.random() * getGameplayFolders().length);
           nextFolderChange = randomBetween(5, 15);
           spawnElapsed = 0;
           restoredSheets = [];
@@ -2320,6 +2438,7 @@
         winScreen.hidden = true;
         factsScreen.hidden = true;
         fateScreen.hidden = true;
+        pointsChoice.hidden = true;
         calculateLayout();
         if (resume && restoredSheets.length) {
           const sheetsToRestore = restoredSheets;
@@ -2338,6 +2457,8 @@
       svg.addEventListener("pointerup", event => finishDrag(event));
       svg.addEventListener("pointercancel", event => finishDrag(event, true));
       restartButton.addEventListener("click", () => startGame());
+      givePointsToCleaner.addEventListener("click", () => resolveYourPoints(true));
+      keepYourPoints.addEventListener("click", () => resolveYourPoints(false));
       backToComputer.addEventListener("click", returnToComputer);
       officeFate.addEventListener("click", showOfficeFate);
       backToDossiers.addEventListener("click", () => {
