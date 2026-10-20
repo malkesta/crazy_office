@@ -1223,25 +1223,29 @@
             portraitCard.append(portrait);
           }
           const status = element("text", {
-            x, y: y - folderH * .58, "text-anchor": "middle", opacity: "0",
-            "font-size": unit * .19, "font-weight": "900", "letter-spacing": ".7", "paint-order": "stroke",
-            stroke: "#182028", "stroke-width": unit * .04, "pointer-events": "none"
+            x, y: y + folderH * .24, "text-anchor": "middle", "dominant-baseline": "middle", opacity: "0",
+            "font-size": unit * .14, "font-weight": "900", "letter-spacing": ".35", "paint-order": "stroke",
+            stroke: "#182028", "stroke-width": unit * .035, "pointer-events": "none"
           });
           const activeMarker = element("g", { class: "active-marker", opacity: "0", "pointer-events": "none" });
+          const markerX = x - folderW * .34;
+          const markerY = y - folderH * .79;
+          const markerWidth = folderW * .68;
+          const markerHeight = unit * .28;
           activeMarker.append(
             element("rect", {
-              x: x - folderW * .34, y: y - folderH * .79, width: folderW * .68, height: unit * .28,
+              x: markerX, y: markerY, width: markerWidth, height: markerHeight,
               rx: unit * .09, fill: "#fff0a4", stroke: "#9f6828", "stroke-width": unit * .025
             }),
             element("text", {
-              x, y: y - folderH * .59, "text-anchor": "middle", fill: "#503315",
+              x: markerX + markerWidth / 2, y: markerY + markerHeight / 2, "text-anchor": "middle", "dominant-baseline": "middle", fill: "#503315",
               "font-size": unit * .15, "font-weight": "900", "letter-spacing": ".7"
             })
           );
-          activeMarker.lastElementChild.textContent = `${folderData.label} СЮДА!`;
-          group.append(glow, back, front, number, portraitCard, status, activeMarker);
+          activeMarker.lastElementChild.textContent = "ДОСЬЕ СЮДА!";
+          group.append(glow, back, front, number, portraitCard, activeMarker, status);
           folderLayer.append(group);
-          folders.push({ x, y, width: folderW, height: folderH, group, glow, back, front, status, id: folderData.id });
+          folders.push({ x, y, width: folderW, height: folderH, group, glow, back, front, status, statusY: y + folderH * .24, statusTimer: 0, statusFrame: 0, id: folderData.id });
         });
         updateActiveFolder();
       }
@@ -1504,7 +1508,7 @@
           }
           updateScore();
           saveProgress();
-          flashFolderSuccess(folder);
+          flashFolderSuccess(folder, points);
           for (const sheet of [...carriedSheets]) fileSheet(sheet, folder);
           if (folder.id === "you") showYourPointsChoice();
           if (score >= TARGET_SCORE) win();
@@ -1627,19 +1631,37 @@
         showFolderStatus(folder, "НЕ ТУДА", "#ff7777");
       }
 
-      function flashFolderSuccess(folder) {
+      function flashFolderSuccess(folder, points) {
         folder.group.classList.remove("folder-success");
         void folder.group.getBoundingClientRect();
         folder.group.classList.add("folder-success");
         window.setTimeout(() => folder.group.classList.remove("folder-success"), 780);
-        showFolderStatus(folder, "ГОТОВО!", "#73e7a1");
+        showFolderStatus(folder, `+${points}`, "#73e7a1", true);
       }
 
-      function showFolderStatus(folder, text, color) {
+      function showFolderStatus(folder, text, color, floatUp = false) {
+        window.clearTimeout(folder.statusTimer);
+        if (folder.statusFrame) window.cancelAnimationFrame(folder.statusFrame);
         folder.status.textContent = text;
         folder.status.setAttribute("fill", color);
+        folder.status.setAttribute("y", folder.statusY);
         folder.status.setAttribute("opacity", "1");
-        window.setTimeout(() => folder.status.setAttribute("opacity", "0"), 720);
+        if (!floatUp) {
+          folder.statusTimer = window.setTimeout(() => folder.status.setAttribute("opacity", "0"), 720);
+          return;
+        }
+        const startedAt = performance.now();
+        const duration = 880;
+        const rise = unit * .48;
+        const animate = now => {
+          const progress = Math.min((now - startedAt) / duration, 1);
+          const eased = 1 - Math.pow(1 - progress, 2);
+          folder.status.setAttribute("y", folder.statusY - rise * eased);
+          folder.status.setAttribute("opacity", `${1 - progress}`);
+          if (progress < 1) folder.statusFrame = window.requestAnimationFrame(animate);
+          else folder.statusFrame = 0;
+        };
+        folder.statusFrame = window.requestAnimationFrame(animate);
       }
 
       function animateSheet(sheet, targetX, targetY, options = {}) {
