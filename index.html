@@ -284,6 +284,11 @@
     .fact-lock { flex: 0 0 24px; text-align: center; }
     .fact-button { margin-left: auto; background: #5a8fc1; color: white; font-size: 12px; }
     .fact-button:disabled { background: #3d4c57; color: #87939b; cursor: not-allowed; }
+    .points-transfer { margin: 0 0 10px; padding: 9px; border: 1px solid rgb(121 194 156 / 55%); border-radius: 10px; background: rgb(24 77 61 / 38%); }
+    .points-transfer p { margin: 0 0 7px; color: #d7f2df; font-size: 12px; line-height: 1.3; }
+    .points-transfer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .points-transfer-button { border: 0; border-radius: 8px; padding: 7px 9px; background: #3b9b70; color: #f5fff8; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+    .points-transfer-button.cancel { background: #5e6b73; }
     .fact.dialogue-fact { border: 1px solid rgb(132 160 173 / 48%); }
     .fact.dialogue-fact.available { border-color: #f2c85d; }
     .dialogue-inline-icon { display: inline-grid; flex: 0 0 auto; place-items: center; width: 20px; height: 18px; border: 1px solid currentColor; border-radius: 9px; color: #8fa3aa; font-size: 11px; line-height: 1; }
@@ -443,6 +448,9 @@
       const employeeRunScores = [0, 0, 0, 0];
       const EMPLOYEE_TARGET = TARGET_SCORE / 4;
       const factsUnlocked = [0, 0, 0, 0];
+      // Facts are unlocked in order, so this stores the boundary between the
+      // already reviewed part of a dossier and the facts found in its current visit.
+      const factsReviewed = [0, 0, 0, 0];
       const affection = [0, 0, 0, 0];
       const factsAtLastReturn = [0, 0, 0, 0];
       const dialogueMilestones = [2, 10, 20];
@@ -452,8 +460,7 @@
       let activeDialogue = null;
       let openingDialogue = null;
       let mobileFactsEmployee = null;
-      let mobileFactsVisits = 0;
-      let mobileFactsSortKnownLast = false;
+      let transferSource = null;
       const employees = [
         { name: "Лена — секретарь", description: "Королева маникюра и негласный диспетчер всех офисных катастроф.", facts: [
           "90% времени красит ногти, а оставшиеся 10% — спасает фирму.",
@@ -685,6 +692,7 @@
         employeeEarned.fill(0);
         employeeRunScores.fill(0);
         factsUnlocked.fill(0);
+        factsReviewed.fill(0);
         factsAtLastReturn.fill(0);
         affection.fill(0);
         dialogueTriggered.forEach(triggered => triggered.clear());
@@ -696,6 +704,7 @@
         savedRunAvailable = false;
         hasStoredProgress = false;
         restoredSheets = [];
+        transferSource = null;
         syncSplashActions();
       }
 
@@ -704,11 +713,12 @@
         try {
           const shortestSide = Math.min(width, height) || 1;
           const data = {
-            version: 1,
+            version: 2,
             employeeScores,
             employeeEarned,
             employeeRunScores,
             factsUnlocked,
+            factsReviewed,
             affection,
             factsAtLastReturn,
             dialogueTriggered: dialogueTriggered.map(triggered => [...triggered]),
@@ -735,13 +745,20 @@
       function loadProgress() {
         try {
           const data = JSON.parse(window.localStorage.getItem(SAVE_KEY));
-          if (!data || data.version !== 1) return;
+          if (!data || ![1, 2].includes(data.version)) return;
           hasStoredProgress = true;
           restoreNumbers(employeeScores, data.employeeScores);
           restoreNumbers(employeeEarned, data.employeeEarned);
           restoreNumbers(employeeRunScores, data.employeeRunScores);
           restoreNumbers(factsUnlocked, data.factsUnlocked);
           factsUnlocked.forEach((count, index) => { factsUnlocked[index] = Math.min(count, employees[index].facts.length); });
+          // Save files from before v2 do not have this boundary. They were saved
+          // after a return to the gameplay loop, so their already unlocked facts
+          // are treated as reviewed.
+          restoreNumbers(factsReviewed, data.factsReviewed || data.factsAtLastReturn);
+          factsReviewed.forEach((count, index) => {
+            factsReviewed[index] = Math.min(count, factsUnlocked[index]);
+          });
           if (Array.isArray(data.affection)) {
             data.affection.forEach((value, index) => {
               const restored = Number(value);
@@ -1631,11 +1648,8 @@
         if (animationFrame) cancelAnimationFrame(animationFrame);
         animationFrame = 0;
         gameMusic.pause();
-        if (usesMobileFactsLayout()) {
-          mobileFactsSortKnownLast = mobileFactsVisits > 0;
-          mobileFactsVisits += 1;
-          mobileFactsEmployee = null;
-        }
+        if (usesMobileFactsLayout()) mobileFactsEmployee = null;
+        transferSource = null;
         renderFacts();
         factsScreen.hidden = false;
         backToComputer.focus();
@@ -1650,6 +1664,70 @@
         return nextFact < employees[employeeIndex].facts.length
           && employeeScores[employeeIndex] >= factCost(nextFact)
           && isFactAvailable(employeeIndex, nextFact);
+      }
+
+      function canTransferPointsFrom(employeeIndex) {
+        return factsUnlocked[employeeIndex] === employees[employeeIndex].facts.length
+          && employeeScores[employeeIndex] > 0
+          && employees.some((employee, targetIndex) =>
+            targetIndex !== employeeIndex && factsUnlocked[targetIndex] < employee.facts.length
+          );
+      }
+
+      function transferPoints(sourceIndex, targetIndex) {
+        if (sourceIndex === targetIndex || !canTransferPointsFrom(sourceIndex)) return;
+        if (factsUnlocked[targetIndex] === employees[targetIndex].facts.length) return;
+        employeeScores[targetIndex] += employeeScores[sourceIndex];
+        employeeScores[sourceIndex] = 0;
+        transferSource = null;
+        saveProgress();
+        renderFacts();
+      }
+
+      function createPointsTransfer(employeeIndex) {
+        if (!canTransferPointsFrom(employeeIndex)) return null;
+        const transfer = document.createElement("section");
+        transfer.className = "points-transfer";
+        const copy = document.createElement("p");
+        const choosingRecipient = transferSource === employeeIndex;
+        copy.textContent = choosingRecipient
+          ? `Передать ${employeeScores[employeeIndex]} очк. кому?`
+          : `Все факты открыты. Можно передать лишние очки: ${employeeScores[employeeIndex]}.`;
+        const actions = document.createElement("div");
+        actions.className = "points-transfer-actions";
+        if (choosingRecipient) {
+          employees.forEach((employee, targetIndex) => {
+            if (targetIndex === employeeIndex || factsUnlocked[targetIndex] === employee.facts.length) return;
+            const target = document.createElement("button");
+            target.className = "points-transfer-button";
+            target.type = "button";
+            target.textContent = employee.name.split(" — ")[0];
+            target.addEventListener("click", () => transferPoints(employeeIndex, targetIndex));
+            actions.append(target);
+          });
+          const cancel = document.createElement("button");
+          cancel.className = "points-transfer-button cancel";
+          cancel.type = "button";
+          cancel.textContent = "Отмена";
+          cancel.addEventListener("click", () => { transferSource = null; renderFacts(); });
+          actions.append(cancel);
+        } else {
+          const open = document.createElement("button");
+          open.className = "points-transfer-button";
+          open.type = "button";
+          open.textContent = "Передать очки";
+          open.addEventListener("click", () => { transferSource = employeeIndex; renderFacts(); });
+          actions.append(open);
+        }
+        transfer.append(copy, actions);
+        return transfer;
+      }
+
+      function markFactsReviewed() {
+        factsUnlocked.forEach((count, employeeIndex) => {
+          factsReviewed[employeeIndex] = count;
+        });
+        saveProgress();
       }
 
       function allAvailableFirstDialoguesSeen() {
@@ -1775,7 +1853,10 @@
             }
             list.append(row);
           });
-          file.append(intro, balance, recognitionLabel, pointsRow, list);
+          const transfer = createPointsTransfer(employeeIndex);
+          file.append(intro, balance);
+          if (transfer) file.append(transfer);
+          file.append(recognitionLabel, pointsRow, list);
           factsGrid.append(file);
         });
         const knownFacts = factsUnlocked.reduce((total, count) => total + count, 0);
@@ -1914,7 +1995,11 @@
         const list = document.createElement("div");
         list.className = "fact-list";
         const facts = employee.facts.map((fact, factIndex) => ({ fact, factIndex }));
-        if (mobileFactsSortKnownLast) facts.sort((first, second) => Number(first.factIndex < factsUnlocked[employeeIndex]) - Number(second.factIndex < factsUnlocked[employeeIndex]));
+        facts.sort((first, second) => {
+          const firstIsReviewed = first.factIndex < factsReviewed[employeeIndex];
+          const secondIsReviewed = second.factIndex < factsReviewed[employeeIndex];
+          return Number(firstIsReviewed) - Number(secondIsReviewed);
+        });
         facts.forEach(({ fact, factIndex }) => {
           const unlocked = factIndex < factsUnlocked[employeeIndex];
           const row = document.createElement("div");
@@ -1942,7 +2027,10 @@
         const navigation = document.createElement("div");
         navigation.className = "mobile-dossier-nav";
         navigation.append(back, intro);
-        file.append(navigation, balance, recognition, list);
+        const transfer = createPointsTransfer(employeeIndex);
+        file.append(navigation, balance);
+        if (transfer) file.append(transfer);
+        file.append(recognition, list);
         factsGrid.append(file);
       }
 
@@ -2131,6 +2219,10 @@
       }
 
       function returnToComputer() {
+        // Crossing back into the leaf-collecting gameplay closes the current
+        // fact-reading session. Facts opened during it become reviewed; facts
+        // opened on the next visit will stay at the top of a mobile dossier.
+        markFactsReviewed();
         const gains = factsUnlocked.map((count, index) => count - factsAtLastReturn[index]);
         const allLearnedTogether = gains.every(gain => gain >= 2);
         const firstCandidates = [];
