@@ -262,6 +262,8 @@
     .facts-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     .employee-file { padding: 11px; border: 1px solid rgb(255 239 192 / 35%); border-radius: 16px; background: linear-gradient(135deg, rgb(50 37 30 / 93%), rgb(24 35 45 / 94%)); box-shadow: 0 12px 28px rgb(0 0 0 / 35%); min-width: 0; }
     .employee-file.mystery-file { display: grid; place-content: center; min-height: 170px; text-align: center; background: repeating-linear-gradient(-45deg, rgb(26 32 40 / 95%), rgb(26 32 40 / 95%) 9px, rgb(36 44 52 / 95%) 9px, rgb(36 44 52 / 95%) 18px); border-style: dashed; }
+    .employee-file.draft-file { border: 2px solid #d8ad4e; background: linear-gradient(135deg, rgb(91 66 24 / 96%), rgb(42 35 23 / 97%)); box-shadow: inset 0 0 0 2px rgb(255 226 137 / 18%), 0 12px 28px rgb(0 0 0 / 35%); }
+    .draft-file .mystery-mark { color: #ffe08a; }
     .mystery-mark { font-size: 42px; line-height: 1; color: #f2c365; text-shadow: 0 0 16px rgb(242 195 101 / 60%); }
     .mystery-file h2 { margin: 7px 0 4px; font-size: 16px; }
     .mystery-file p { margin: 0; color: #b9c6cb; font-size: 12px; line-height: 1.35; }
@@ -289,14 +291,6 @@
     .points-transfer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .points-transfer-button { border: 0; border-radius: 8px; padding: 7px 9px; background: #3b9b70; color: #f5fff8; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
     .points-transfer-button.cancel { background: #5e6b73; }
-    .points-choice { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgb(4 10 15 / 72%); }
-    .points-choice[hidden] { display: none; }
-    .points-choice-card { width: min(440px, 100%); padding: 24px; border: 2px solid #e5b55a; border-radius: 18px; background: linear-gradient(145deg, #243743, #15232d); box-shadow: 0 20px 55px rgb(0 0 0 / 50%); color: #fff4d8; text-align: center; }
-    .points-choice-card h2 { margin: 0 0 10px; font-size: 24px; }
-    .points-choice-card p { margin: 0 0 17px; line-height: 1.45; color: #d7e1df; }
-    .points-choice-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
-    .points-choice-actions button { border: 0; border-radius: 10px; padding: 10px 13px; background: #3b9b70; color: #f5fff8; font: inherit; font-weight: 800; cursor: pointer; }
-    .points-choice-actions .keep-points { background: #587184; }
     .fact.dialogue-fact { border: 1px solid rgb(132 160 173 / 48%); }
     .fact.dialogue-fact.available { border-color: #f2c85d; }
     .dialogue-inline-icon { display: inline-grid; flex: 0 0 auto; place-items: center; width: 20px; height: 18px; border: 1px solid currentColor; border-radius: 9px; color: #8fa3aa; font-size: 11px; line-height: 1; }
@@ -407,16 +401,6 @@
   <section id="fate-screen" class="fate-screen" hidden>
     <div class="fate-card"><h1>Судьба офиса</h1><p id="fate-text"></p><div id="fate-employees" class="fate-employees" aria-label="Отношение сотрудников"></div><button id="back-to-dossiers" class="facts-back" type="button">К досье</button></div>
   </section>
-  <section id="points-choice" class="points-choice" hidden aria-live="polite">
-    <div class="points-choice-card" role="dialog" aria-modal="true" aria-labelledby="points-choice-title">
-      <h2 id="points-choice-title">Папка «Ты» засекречена</h2>
-      <p id="points-choice-text"></p>
-      <div class="points-choice-actions">
-        <button id="give-points-to-cleaner" type="button">Передать уборщице</button>
-        <button id="keep-your-points" class="keep-points" type="button">Сохранить себе</button>
-      </div>
-    </div>
-  </section>
   <script src="content/facts.js"></script>
   <script src="content/dialogues.js"></script>
   <script>
@@ -450,10 +434,6 @@
       const dialogueName = document.querySelector("#dialogue-name");
       const dialogueText = document.querySelector("#dialogue-text");
       const dialogueActions = document.querySelector("#dialogue-actions");
-      const pointsChoice = document.querySelector("#points-choice");
-      const pointsChoiceText = document.querySelector("#points-choice-text");
-      const givePointsToCleaner = document.querySelector("#give-points-to-cleaner");
-      const keepYourPoints = document.querySelector("#keep-your-points");
       const NS = "http://www.w3.org/2000/svg";
       const folders = [];
       const sheets = [];
@@ -473,9 +453,12 @@
       let cleanerScore = 0;
       let cleanerUnlocked = 0;
       let cleanerAffection = 0;
+      let vasekUnlocked = 0;
+      let vasekAffection = 0;
       let yourScore = 0;
-      const postCoreRunScores = [0, 0];
-      let pendingYourPoints = 0;
+      let formerDirectorScore = 0;
+      let vasekScore = 0;
+      const postCoreRunScores = [0, 0, 0, 0];
       const EMPLOYEE_TARGET = TARGET_SCORE / 4;
       const factsUnlocked = [0, 0, 0, 0];
       // Facts are unlocked in order, so this stores the boundary between the
@@ -488,13 +471,15 @@
       const dialogueTriggered = [new Set(), new Set(), new Set(), new Set()];
       const shownDialogues = [new Set(), new Set(), new Set(), new Set()];
       const cleanerShownDialogues = new Set();
+      const vasekShownDialogues = new Set();
       let activeDialogue = null;
       let openingDialogue = null;
       let mobileFactsEmployee = null;
       let transferSource = null;
-      const { employees, cleaner } = window.OFFICE_FACTS;
+      const { employees, cleaner, vasek } = window.OFFICE_FACTS;
       const cleanerPortraitIsHappy = Math.random() < .5;
-      const { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices } = window.OFFICE_DIALOGUES;
+      const vasekPortraitIsFriendly = Math.random() < .5;
+      const { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices, vasekDialogueLines, vasekDialogueChoices } = window.OFFICE_DIALOGUES;
 
       function validateContent() {
         const employeeIds = ["lena", "boss", "igor", "guard"];
@@ -505,6 +490,7 @@
           && employees.every((employee, index) => employee?.id === employeeIds[index]
             && Array.isArray(employee.facts) && employee.facts.length === 20);
         const validCleaner = cleaner?.id === "cleaner" && Array.isArray(cleaner.facts) && cleaner.facts.length === 20;
+        const validVasek = vasek?.id === "vasek" && Array.isArray(vasek.facts) && vasek.facts.length === 20;
         const validDialogueLines = dialogueSets.every(set => Array.isArray(set)
           && set.length === employeeIds.length && set.every(lines => Array.isArray(lines) && lines.length === 8));
         const validChoices = choiceSets.every(set => Array.isArray(set)
@@ -515,7 +501,12 @@
           && Array.isArray(cleanerDialogueChoices) && cleanerDialogueChoices.length === 3
           && cleanerDialogueChoices.every(choices => Array.isArray(choices) && choices.length === 2
             && choices.every(pair => Array.isArray(pair) && pair.length === 2));
-        if (!validEmployees || !validCleaner || !validDialogueLines || !validChoices || !validCleanerDialogues) {
+        const validVasekDialogues = Array.isArray(vasekDialogueLines) && vasekDialogueLines.length === 3
+          && vasekDialogueLines.every(lines => Array.isArray(lines) && lines.length === 8)
+          && Array.isArray(vasekDialogueChoices) && vasekDialogueChoices.length === 3
+          && vasekDialogueChoices.every(choices => Array.isArray(choices) && choices.length === 2
+            && choices.every(pair => Array.isArray(pair) && pair.length === 2));
+        if (!validEmployees || !validCleaner || !validVasek || !validDialogueLines || !validChoices || !validCleanerDialogues || !validVasekDialogues) {
           throw new Error("Ошибка в content/: проверьте ID сотрудников, 20 фактов и 8 реплик в каждом диалоге.");
         }
       }
@@ -533,7 +524,7 @@
       const guardPensFact = "Знает про ручки Игоря, но ему совершенно наплевать.";
 
       function shuffleFacts() {
-        [...employees, cleaner].forEach(employee => {
+        [...employees, cleaner, vasek].forEach(employee => {
           for (let index = employee.facts.length - 1; index > 0; index -= 1) {
             const swap = Math.floor(Math.random() * (index + 1));
             [employee.facts[index], employee.facts[swap]] = [employee.facts[swap], employee.facts[index]];
@@ -617,11 +608,15 @@
         cleanerScore = 0;
         cleanerUnlocked = 0;
         cleanerAffection = 0;
+        vasekUnlocked = 0;
+        vasekAffection = 0;
         yourScore = 0;
-        pendingYourPoints = 0;
+        formerDirectorScore = 0;
+        vasekScore = 0;
         dialogueTriggered.forEach(triggered => triggered.clear());
         shownDialogues.forEach(shown => shown.clear());
         cleanerShownDialogues.clear();
+        vasekShownDialogues.clear();
         score = 0;
         activeFolder = Math.floor(Math.random() * getGameplayFolders().length);
         nextFolderChange = randomBetween(5, 15);
@@ -638,14 +633,18 @@
         try {
           const shortestSide = Math.min(width, height) || 1;
           const data = {
-            version: 3,
+            version: 5,
             employeeScores,
             employeeEarned,
             employeeRunScores,
             cleanerScore,
             cleanerUnlocked,
             cleanerAffection,
+            vasekUnlocked,
+            vasekAffection,
             yourScore,
+            formerDirectorScore,
+            vasekScore,
             postCoreRunScores,
             factsUnlocked,
             factsReviewed,
@@ -654,6 +653,7 @@
             dialogueTriggered: dialogueTriggered.map(triggered => [...triggered]),
             shownDialogues: shownDialogues.map(shown => [...shown]),
             cleanerShownDialogues: [...cleanerShownDialogues],
+            vasekShownDialogues: [...vasekShownDialogues],
             run: {
               score,
               activeFolder,
@@ -676,7 +676,7 @@
       function loadProgress() {
         try {
           const data = JSON.parse(window.localStorage.getItem(SAVE_KEY));
-          if (!data || ![1, 2, 3].includes(data.version)) return;
+          if (!data || ![1, 2, 3, 4, 5].includes(data.version)) return;
           hasStoredProgress = true;
           restoreNumbers(employeeScores, data.employeeScores);
           restoreNumbers(employeeEarned, data.employeeEarned);
@@ -684,8 +684,19 @@
           cleanerScore = Math.max(0, Number(data.cleanerScore) || 0);
           cleanerUnlocked = Math.max(0, Math.min(Number(data.cleanerUnlocked) || 0, cleaner.facts.length));
           cleanerAffection = Math.max(-6, Math.min(Number(data.cleanerAffection) || 0, 6));
+          vasekUnlocked = Math.max(0, Math.min(Number(data.vasekUnlocked) || 0, vasek.facts.length));
+          vasekAffection = Math.max(-6, Math.min(Number(data.vasekAffection) || 0, 6));
           yourScore = Math.max(0, Number(data.yourScore) || 0);
+          formerDirectorScore = Math.max(0, Number(data.formerDirectorScore) || 0);
+          vasekScore = Math.max(0, Number(data.vasekScore) || 0);
           restoreNumbers(postCoreRunScores, data.postCoreRunScores);
+          if (data.version < 5 && Array.isArray(data.postCoreRunScores)) {
+            const legacyRunScores = data.postCoreRunScores;
+            postCoreRunScores[0] = Math.max(0, Number(legacyRunScores[0]) || 0);
+            postCoreRunScores[1] = Math.max(0, Number(legacyRunScores[3]) || 0);
+            postCoreRunScores[2] = Math.max(0, Number(legacyRunScores[1]) || 0);
+            postCoreRunScores[3] = Math.max(0, Number(legacyRunScores[2]) || 0);
+          }
           restoreNumbers(factsUnlocked, data.factsUnlocked);
           factsUnlocked.forEach((count, index) => { factsUnlocked[index] = Math.min(count, employees[index].facts.length); });
           // Save files from before v2 do not have this boundary. They were saved
@@ -720,6 +731,9 @@
           }
           if (Array.isArray(data.cleanerShownDialogues)) {
             data.cleanerShownDialogues.filter(milestone => playableDialogueMilestones.includes(milestone)).forEach(milestone => cleanerShownDialogues.add(milestone));
+          }
+          if (Array.isArray(data.vasekShownDialogues)) {
+            data.vasekShownDialogues.filter(milestone => playableDialogueMilestones.includes(milestone)).forEach(milestone => vasekShownDialogues.add(milestone));
           }
           const savedScore = Number(data.run?.score);
           if (Number.isFinite(savedScore) && savedScore > 0 && savedScore < TARGET_SCORE) {
@@ -782,6 +796,20 @@
         dialoguePortrait.replaceChildren(definitions, image);
       }
 
+      function renderVasekDialoguePortrait(positive) {
+        const portraitX = positive ? 0 : 887;
+        dialoguePortrait.setAttribute("viewBox", "0 0 887 887");
+        const clip = element("clipPath", { id: "vasek-dialogue-portrait-clip", clipPathUnits: "userSpaceOnUse" });
+        clip.append(element("rect", { x: 0, y: 0, width: 887, height: 887 }));
+        const definitions = element("defs");
+        definitions.append(clip);
+        const image = element("image", {
+          href: "assets/vasek-portraits-v2.png", x: -portraitX, y: 0, width: 1774, height: 887,
+          "clip-path": "url(#vasek-dialogue-portrait-clip)"
+        });
+        dialoguePortrait.replaceChildren(definitions, image);
+      }
+
       function allCoreFactsKnown() {
         return employees.every((employee, employeeIndex) => factsUnlocked[employeeIndex] === employee.facts.length);
       }
@@ -790,7 +818,9 @@
         if (allCoreFactsKnown()) {
           return [
             { id: "cleaner", label: "РАИСА", color: "#47736d" },
-            { id: "you", label: "ТЫ", color: "#5f6178" }
+            { id: "vasek", label: "ВАСЁК", color: "#4c7864" },
+            { id: "you", label: "ТЫ", color: "#5f6178" },
+            { id: "former-director", label: "ДИРЕКТОР", color: "#a77b2d" }
           ];
         }
         return employees.map((employee, index) => ({
@@ -815,6 +845,24 @@
         portrait.append(definitions, element("image", {
           href: "assets/cleaner-portraits.png", x: -portraitX, y: 0, width: 1774, height: 887,
           "clip-path": "url(#cleaner-portrait-clip)"
+        }));
+        return portrait;
+      }
+
+      function createVasekPortrait(className = "facts-portrait") {
+        const portraitX = vasekPortraitIsFriendly ? 0 : 887;
+        const portrait = element("svg", {
+          class: className,
+          viewBox: "0 0 887 887",
+          preserveAspectRatio: "xMidYMax meet", "aria-hidden": "true"
+        });
+        const clip = element("clipPath", { id: "vasek-portrait-clip", clipPathUnits: "userSpaceOnUse" });
+        clip.append(element("rect", { x: 0, y: 0, width: 887, height: 887 }));
+        const definitions = element("defs");
+        definitions.append(clip);
+        portrait.append(definitions, element("image", {
+          href: "assets/vasek-portraits-v2.png", x: -portraitX, y: 0, width: 1774, height: 887,
+          "clip-path": "url(#vasek-portrait-clip)"
         }));
         return portrait;
       }
@@ -885,11 +933,123 @@
         return file;
       }
 
+      function createPhaseTwoDraftFile({ name, score, note, transfer }) {
+        const file = document.createElement("section");
+        file.className = "employee-file mystery-file draft-file";
+        const mark = document.createElement("div");
+        mark.className = "mystery-mark";
+        mark.textContent = "✦";
+        const heading = document.createElement("h2");
+        heading.textContent = name;
+        const description = document.createElement("p");
+        description.textContent = `${note} Очки в запасе: ${score}.`;
+        file.append(mark, heading, description);
+        if (score) {
+          const button = document.createElement("button");
+          button.className = "points-transfer-button";
+          button.type = "button";
+          button.textContent = "Передать очки";
+          button.addEventListener("click", () => {
+            const actions = document.createElement("div");
+            actions.className = "points-transfer-actions";
+            const recipients = [
+              { name: "Раисе", add: () => { cleanerScore += score; } },
+              { name: "Ваську", add: () => { vasekScore += score; } }
+            ];
+            recipients.forEach(recipient => {
+              const target = document.createElement("button");
+              target.className = "points-transfer-button";
+              target.type = "button";
+              target.textContent = recipient.name;
+              target.addEventListener("click", () => {
+                recipient.add();
+                transfer();
+                saveProgress();
+                renderFacts();
+              });
+              actions.append(target);
+            });
+            button.replaceWith(actions);
+          });
+          file.append(button);
+        }
+        return file;
+      }
+
+      function createVasekFile() {
+        const file = document.createElement("section");
+        file.className = "employee-file";
+        const intro = document.createElement("div");
+        intro.className = "employee-intro";
+        const copy = document.createElement("div");
+        const heading = document.createElement("h2");
+        heading.textContent = vasek.name;
+        const description = document.createElement("p");
+        description.className = "employee-description";
+        description.textContent = vasek.description;
+        copy.append(heading, description);
+        intro.append(createVasekPortrait(), copy);
+        const balance = document.createElement("p");
+        balance.className = "employee-balance";
+        balance.textContent = `Очки для досье: ${vasekScore}`;
+        const recognition = document.createElement("p");
+        recognition.className = "recognition-label";
+        recognition.textContent = "Узнавание сисадмина";
+        const pointsRow = document.createElement("div");
+        pointsRow.className = "points-row";
+        const pointsTrack = document.createElement("div");
+        pointsTrack.className = "points-track";
+        const pointsFill = document.createElement("span");
+        pointsFill.className = "points-fill";
+        pointsFill.style.width = `${vasekUnlocked / vasek.facts.length * 100}%`;
+        pointsTrack.append(pointsFill);
+        const pointsNumber = document.createElement("span");
+        pointsNumber.className = "points-number";
+        pointsNumber.textContent = `${vasekUnlocked} / ${vasek.facts.length}`;
+        pointsRow.append(pointsTrack, pointsNumber);
+        const list = document.createElement("div");
+        list.className = "fact-list";
+        vasek.facts.forEach((fact, factIndex) => {
+          const unlocked = factIndex < vasekUnlocked;
+          const row = document.createElement("div");
+          row.className = `fact${unlocked ? "" : " locked"}`;
+          const icon = document.createElement("span");
+          icon.className = "fact-lock";
+          icon.textContent = unlocked ? "✓" : "🔒";
+          const text = document.createElement("span");
+          text.textContent = unlocked ? fact : "Засекреченный факт";
+          row.append(icon, text);
+          markVasekDialogueFact(row, factIndex, text);
+          if (!unlocked && factIndex === vasekUnlocked) {
+            const cost = factCost(factIndex);
+            const button = document.createElement("button");
+            button.className = "fact-button";
+            button.type = "button";
+            button.textContent = `Открыть · ${cost}`;
+            button.disabled = vasekScore < cost;
+            button.addEventListener("click", unlockVasekFact);
+            row.append(button);
+          }
+          list.append(row);
+        });
+        file.append(intro, balance, recognition, pointsRow, list);
+        return file;
+      }
+
       function unlockCleanerFact() {
         const cost = factCost(cleanerUnlocked);
         if (cleanerScore < cost || cleanerUnlocked >= cleaner.facts.length) return;
         cleanerScore -= cost;
         cleanerUnlocked += 1;
+        saveProgress();
+        renderFacts();
+      }
+
+      function unlockVasekFact() {
+        const cost = factCost(vasekUnlocked);
+        if (vasekScore < cost || vasekUnlocked >= vasek.facts.length) return;
+        vasekScore -= cost;
+        vasekUnlocked += 1;
         saveProgress();
         renderFacts();
       }
@@ -933,6 +1093,7 @@
             preloadImage("assets/office-background-v2.png"),
             preloadImage("assets/employee-portraits-v3.png"),
             preloadImage("assets/cleaner-portraits.png"),
+            preloadImage("assets/vasek-portraits-v2.png"),
             preloadImage("assets/secret-document.png")
           ]).then(() => undefined);
           warmAudio(gameMusic);
@@ -1100,9 +1261,9 @@
           element("rect", { id: "progress-fill", x: progressX, y: progressY, width: progressW * Math.min(score / TARGET_SCORE, 1), height: scoreHeight * .32, rx: unit * .08, fill: "#66cd91" })
         );
         const postCore = allCoreFactsKnown();
-        const names = postCore ? ["РАИСА", "ТЫ · СЕКРЕТНО"] : ["ЛЕНА", "АЛЕКСАНДР М.", "ИГОРЬ", "НИКОЛАЙ"];
+        const names = postCore ? ["РАИСА", "ВАСЁК", "ТЫ", "ДИРЕКТОР"] : ["ЛЕНА", "АЛЕКСАНДР М.", "ИГОРЬ", "НИКОЛАЙ"];
         const runScores = postCore ? postCoreRunScores : employeeRunScores;
-        const barColors = postCore ? ["#6fc7a2", "#8e9cc7"] : ["#f39cad", "#d5a04d", "#8ac77f", "#77a8da"];
+        const barColors = postCore ? ["#6fc7a2", "#79be96", "#8e9cc7", "#e2b455"] : ["#f39cad", "#d5a04d", "#8ac77f", "#77a8da"];
         const folderTarget = TARGET_SCORE / names.length;
         names.forEach((name, index) => {
           const y = scoreY + scoreHeight + unit * (.16 + index * .2);
@@ -1208,7 +1369,14 @@
             portrait.setAttribute("width", folderW * .61);
             portrait.setAttribute("height", folderH * .59);
             portraitCard.append(portrait);
-          } else if (folderData.id === "you") {
+          } else if (folderData.id === "vasek") {
+            const portrait = createVasekPortrait();
+            portrait.setAttribute("x", folderW * .025);
+            portrait.setAttribute("y", folderH * .015);
+            portrait.setAttribute("width", folderW * .61);
+            portrait.setAttribute("height", folderH * .59);
+            portraitCard.append(portrait);
+          } else if (["you", "former-director"].includes(folderData.id)) {
             const secret = element("text", { x: folderW * .33, y: folderH * .45, "text-anchor": "middle", fill: "#354052", "font-size": folderH * .46, "font-weight": "900", "pointer-events": "none" });
             secret.textContent = "?";
             portraitCard.append(secret);
@@ -1463,7 +1631,7 @@
           const scoreWidth = Math.min(width * .38, unit * 4.25);
           progressFill.setAttribute("width", (scoreWidth - unit * 1.68) * Math.min(score / TARGET_SCORE, 1));
           const postCore = allCoreFactsKnown();
-          const names = postCore ? ["РАИСА", "ТЫ · СЕКРЕТНО"] : ["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"];
+          const names = postCore ? ["РАИСА", "ВАСЁК", "ТЫ", "ДИРЕКТОР"] : ["ЛЕНА", "ШЕФ", "ИГОРЬ", "ОХРАНА"];
           const runScores = postCore ? postCoreRunScores : employeeRunScores;
           const folderTarget = TARGET_SCORE / names.length;
           for (let index = 0; index < names.length; index += 1) {
@@ -1497,10 +1665,9 @@
           if (allCoreFactsKnown()) {
             postCoreRunScores[folderIndex] += points;
             if (folder.id === "cleaner") cleanerScore += points;
-            if (folder.id === "you") {
-              yourScore += points;
-              pendingYourPoints += points;
-            }
+            if (folder.id === "you") yourScore += points;
+            if (folder.id === "former-director") formerDirectorScore += points;
+            if (folder.id === "vasek") vasekScore += points;
           } else {
             employeeScores[folderIndex] += points;
             employeeEarned[folderIndex] += points;
@@ -1510,7 +1677,6 @@
           saveProgress();
           flashFolderSuccess(folder, points);
           for (const sheet of [...carriedSheets]) fileSheet(sheet, folder);
-          if (folder.id === "you") showYourPointsChoice();
           if (score >= TARGET_SCORE) win();
         } else {
           flashFolderError(folder);
@@ -1528,23 +1694,6 @@
         draggedPointerId = null;
         if (pointerId !== null && svg.hasPointerCapture(pointerId)) svg.releasePointerCapture(pointerId);
         window.setTimeout(() => { folderLocked = false; }, 120);
-      }
-
-      function showYourPointsChoice() {
-        if (!pendingYourPoints) return;
-        pointsChoiceText.textContent = `Получено очков: ${pendingYourPoints}. Папка «Ты» ещё засекречена: передать их Раисе Павловне или сохранить до следующей истории?`;
-        pointsChoice.hidden = false;
-        givePointsToCleaner.focus();
-      }
-
-      function resolveYourPoints(transfer) {
-        const points = Math.min(pendingYourPoints, yourScore);
-        if (transfer && points) cleanerScore += points;
-        if (transfer) yourScore -= points;
-        pendingYourPoints = 0;
-        pointsChoice.hidden = true;
-        saveProgress();
-        if (!factsScreen.hidden) renderFacts();
       }
 
       function removeSheet(sheet) {
@@ -1860,6 +2009,22 @@
         row.insertBefore(bubble, text);
       }
 
+      function markVasekDialogueFact(row, factIndex, text) {
+        const milestone = factIndex + 1;
+        if (!dialogueMilestones.includes(milestone)) return;
+        const bubble = document.createElement("span");
+        bubble.className = "dialogue-inline-icon";
+        bubble.textContent = "💬";
+        const isSeen = vasekShownDialogues.has(milestone);
+        const isUnlocked = vasekUnlocked >= milestone;
+        const state = isSeen ? "completed" : isUnlocked ? "available" : "locked";
+        const label = isSeen ? "Диалог пройден" : isUnlocked ? "Диалог доступен" : `Диалог на ${milestone}-м факте`;
+        row.classList.add("dialogue-fact", state);
+        bubble.title = label;
+        bubble.setAttribute("aria-label", label);
+        row.insertBefore(bubble, text);
+      }
+
       function renderFacts() {
         factsGrid.replaceChildren();
         factsScreen.classList.toggle("mobile-facts-mode", usesMobileFactsLayout());
@@ -1970,30 +2135,21 @@
           factsGrid.append(mystery);
         }
         if (allKnown) {
-          const you = document.createElement("section");
-          you.className = "employee-file mystery-file";
-          const mark = document.createElement("div");
-          mark.className = "mystery-mark";
-          mark.textContent = "?";
-          const heading = document.createElement("h2");
-          heading.textContent = "Ты: засекречено";
-          const note = document.createElement("p");
-          note.textContent = `Очки в запасе: ${yourScore}. Их можно сохранить для будущей истории или передать Раисе Павловне.`;
-          you.append(mark, heading, note);
-          if (yourScore) {
-            const transfer = document.createElement("button");
-            transfer.className = "points-transfer-button";
-            transfer.type = "button";
-            transfer.textContent = "Передать уборщице";
-            transfer.addEventListener("click", () => {
-              cleanerScore += yourScore;
-              yourScore = 0;
-              saveProgress();
-              renderFacts();
-            });
-            you.append(transfer);
-          }
-          factsGrid.append(you);
+          factsGrid.append(createVasekFile());
+          factsGrid.append(
+            createPhaseTwoDraftFile({
+              name: "Ты: засекречено",
+              score: yourScore,
+              note: "Папка закрыта до следующей истории.",
+              transfer: () => { yourScore = 0; }
+            }),
+            createPhaseTwoDraftFile({
+              name: "Бывший директор",
+              score: formerDirectorScore,
+              note: "Черновое золочёное досье. Пока не заполнено.",
+              transfer: () => { formerDirectorScore = 0; }
+            })
+          );
         }
       }
 
@@ -2049,10 +2205,26 @@
             card.append(createCleanerPortrait(), title, known, action);
             card.addEventListener("click", () => { mobileFactsEmployee = "cleaner"; renderFacts(); });
             factsGrid.append(card);
-            const you = document.createElement("section");
-            you.className = "mobile-employee-card locked";
-            you.innerHTML = `<h2>Ты: засекречено</h2><p>Очки в запасе: ${yourScore}</p>`;
-            factsGrid.append(you);
+            const vasekCard = document.createElement("button");
+            vasekCard.className = "mobile-employee-card";
+            vasekCard.type = "button";
+            vasekCard.innerHTML = `<h2>Васёк — сисадмин</h2><p class="mobile-card-score">Очки: ${vasekScore}</p><p>Узнавание: ${vasekUnlocked} / ${vasek.facts.length}</p><p class="mobile-card-action">Открыть досье</p>`;
+            vasekCard.prepend(createVasekPortrait());
+            vasekCard.addEventListener("click", () => { mobileFactsEmployee = "vasek"; renderFacts(); });
+            factsGrid.append(vasekCard);
+            [
+              createPhaseTwoDraftFile({
+                name: "Ты: засекречено", score: yourScore,
+                note: "Папка закрыта до следующей истории.", transfer: () => { yourScore = 0; }
+              }),
+              createPhaseTwoDraftFile({
+                name: "Бывший директор", score: formerDirectorScore,
+                note: "Черновое золочёное досье. Пока не заполнено.", transfer: () => { formerDirectorScore = 0; }
+              }),
+            ].forEach(file => {
+              file.classList.add("mobile-employee-card", "locked");
+              factsGrid.append(file);
+            });
           } else {
             const locked = document.createElement("section");
             locked.className = "mobile-employee-card locked";
@@ -2073,6 +2245,23 @@
           navigation.className = "mobile-dossier-nav";
           const label = document.createElement("strong");
           label.textContent = "Бонусное досье";
+          navigation.append(back, label);
+          file.prepend(navigation);
+          factsGrid.append(file);
+          return;
+        }
+
+        if (mobileFactsEmployee === "vasek") {
+          const file = createVasekFile();
+          const back = document.createElement("button");
+          back.className = "mobile-dossier-back";
+          back.type = "button";
+          back.textContent = "← К сотрудникам";
+          back.addEventListener("click", () => { mobileFactsEmployee = null; renderFacts(); });
+          const navigation = document.createElement("div");
+          navigation.className = "mobile-dossier-nav";
+          const label = document.createElement("strong");
+          label.textContent = "Второе досье";
           navigation.append(back, label);
           file.prepend(navigation);
           factsGrid.append(file);
@@ -2204,6 +2393,8 @@
       function showDialogue(employeeIndex, milestone) {
         if (employeeIndex === "cleaner") {
           cleanerShownDialogues.add(milestone);
+        } else if (employeeIndex === "vasek") {
+          vasekShownDialogues.add(milestone);
         } else {
           shownDialogues[employeeIndex].add(milestone);
           dialogueTriggered[employeeIndex].add(milestone);
@@ -2294,20 +2485,26 @@
         if (panel === 6) fadeNovelMusic(.045, 450);
         if (panel === 7) fadeNovelMusic(0, 450);
         const isCleaner = employeeIndex === "cleaner";
-        const positive = isCleaner ? cleanerAffection >= 0 : affection[employeeIndex] >= 0;
+        const isVasek = employeeIndex === "vasek";
+        const positive = isCleaner ? cleanerAffection >= 0 : isVasek ? vasekAffection >= 0 : affection[employeeIndex] >= 0;
         if (isCleaner) renderCleanerDialoguePortrait(positive);
+        else if (isVasek) renderVasekDialoguePortrait(positive);
         else renderDialoguePortrait(employeeIndex, positive);
-        dialogueName.textContent = isCleaner ? cleaner.name : employees[employeeIndex].name;
+        dialogueName.textContent = isCleaner ? cleaner.name : isVasek ? vasek.name : employees[employeeIndex].name;
         const isSecondDialogue = milestone === dialogueMilestones[1];
         const isFinalDialogue = milestone === dialogueMilestones[2];
         const lines = isCleaner
           ? cleanerDialogueLines[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
+          : isVasek
+            ? vasekDialogueLines[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
           : (isFinalDialogue ? finalDialogueLines : isSecondDialogue ? secondDialogueLines : dialogueLines)[employeeIndex];
         dialogueText.textContent = lines[panel];
         dialogueActions.replaceChildren();
         if (panel === 3 || panel === 7) {
           const choicesByDialogue = isCleaner
             ? cleanerDialogueChoices[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
+            : isVasek
+              ? vasekDialogueChoices[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
             : (isFinalDialogue ? finalDialogueChoices : isSecondDialogue ? secondDialogueChoices : firstDialogueChoices)[employeeIndex];
           const choiceCopy = choicesByDialogue[panel === 3 ? 0 : 1];
           const choices = document.createElement("div");
@@ -2336,6 +2533,7 @@
 
       function chooseDialogue(supportive) {
         if (activeDialogue.employeeIndex === "cleaner") cleanerAffection += supportive ? 1 : -1;
+        else if (activeDialogue.employeeIndex === "vasek") vasekAffection += supportive ? 1 : -1;
         else affection[activeDialogue.employeeIndex] += supportive ? 1 : -1;
         saveProgress();
         if (activeDialogue.panel === 7) {
@@ -2371,6 +2569,9 @@
         if (cleanerUnlocked >= firstMilestone && !cleanerShownDialogues.has(firstMilestone)) firstCandidates.push({ employeeIndex: "cleaner", milestone: firstMilestone });
         if (cleanerUnlocked >= secondMilestone && !cleanerShownDialogues.has(secondMilestone)) secondCandidates.push({ employeeIndex: "cleaner", milestone: secondMilestone });
         if (cleanerUnlocked >= finalMilestone && !cleanerShownDialogues.has(finalMilestone)) finalCandidates.push({ employeeIndex: "cleaner", milestone: finalMilestone });
+        if (vasekUnlocked >= firstMilestone && !vasekShownDialogues.has(firstMilestone)) firstCandidates.push({ employeeIndex: "vasek", milestone: firstMilestone });
+        if (vasekUnlocked >= secondMilestone && !vasekShownDialogues.has(secondMilestone)) secondCandidates.push({ employeeIndex: "vasek", milestone: secondMilestone });
+        if (vasekUnlocked >= finalMilestone && !vasekShownDialogues.has(finalMilestone)) finalCandidates.push({ employeeIndex: "vasek", milestone: finalMilestone });
         const candidates = firstCandidates.length ? firstCandidates : secondCandidates.length ? secondCandidates : finalCandidates;
         factsUnlocked.forEach((count, index) => { factsAtLastReturn[index] = count; });
         if (allLearnedTogether) {
@@ -2387,7 +2588,9 @@
           return;
         }
         if (factsUnlocked.every((count, index) => count === employees[index].facts.length)
-          && employees.every((employee, index) => shownDialogues[index].has(dialogueMilestones[2]))) {
+          && employees.every((employee, index) => shownDialogues[index].has(dialogueMilestones[2]))
+          && cleanerUnlocked === cleaner.facts.length && cleanerShownDialogues.has(dialogueMilestones[2])
+          && vasekUnlocked === vasek.facts.length && vasekShownDialogues.has(dialogueMilestones[2])) {
           showEnding();
           return;
         }
@@ -2460,7 +2663,6 @@
         winScreen.hidden = true;
         factsScreen.hidden = true;
         fateScreen.hidden = true;
-        pointsChoice.hidden = true;
         calculateLayout();
         if (resume && restoredSheets.length) {
           const sheetsToRestore = restoredSheets;
@@ -2479,8 +2681,6 @@
       svg.addEventListener("pointerup", event => finishDrag(event));
       svg.addEventListener("pointercancel", event => finishDrag(event, true));
       restartButton.addEventListener("click", () => startGame());
-      givePointsToCleaner.addEventListener("click", () => resolveYourPoints(true));
-      keepYourPoints.addEventListener("click", () => resolveYourPoints(false));
       backToComputer.addEventListener("click", returnToComputer);
       officeFate.addEventListener("click", showOfficeFate);
       backToDossiers.addEventListener("click", () => {
