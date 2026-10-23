@@ -479,7 +479,7 @@
       const { employees, cleaner, vasek } = window.OFFICE_FACTS;
       const cleanerPortraitIsHappy = Math.random() < .5;
       const vasekPortraitIsFriendly = Math.random() < .5;
-      const { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices, vasekDialogueLines, vasekDialogueChoices } = window.OFFICE_DIALOGUES;
+      const { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices, vasekDialogueLines, vasekDialogueChoices, openingDialogues, dialoguePortraits } = window.OFFICE_DIALOGUES;
 
       function validateContent() {
         const employeeIds = ["lena", "boss", "igor", "guard"];
@@ -506,19 +506,23 @@
           && Array.isArray(vasekDialogueChoices) && vasekDialogueChoices.length === 3
           && vasekDialogueChoices.every(choices => Array.isArray(choices) && choices.length === 2
             && choices.every(pair => Array.isArray(pair) && pair.length === 2));
-        if (!validEmployees || !validCleaner || !validVasek || !validDialogueLines || !validChoices || !validCleanerDialogues || !validVasekDialogues) {
-          throw new Error("Ошибка в content/: проверьте ID сотрудников, 20 фактов и 8 реплик в каждом диалоге.");
+        const validPortrait = expression => ["auto", "friendly", "annoyed"].includes(expression);
+        const validPortraitRows = (set, count) => Array.isArray(set) && set.length === count
+          && set.every(row => Array.isArray(row) && row.length === 8 && row.every(validPortrait));
+        const validOpeningDialogues = Array.isArray(openingDialogues) && openingDialogues.length === employeeIds.length
+          && openingDialogues.every(dialogue => typeof dialogue?.text === "string" && validPortrait(dialogue.portrait));
+        const validDialoguePortraits = dialoguePortraits
+          && validPortraitRows(dialoguePortraits.first, employeeIds.length)
+          && validPortraitRows(dialoguePortraits.second, employeeIds.length)
+          && validPortraitRows(dialoguePortraits.final, employeeIds.length)
+          && validPortraitRows(dialoguePortraits.cleaner, 3)
+          && validPortraitRows(dialoguePortraits.vasek, 3);
+        if (!validEmployees || !validCleaner || !validVasek || !validDialogueLines || !validChoices || !validCleanerDialogues || !validVasekDialogues || !validOpeningDialogues || !validDialoguePortraits) {
+          throw new Error("Ошибка в content/: проверьте ID сотрудников, 20 фактов, 8 реплик и выражения портретов.");
         }
       }
       validateContent();
 
-      const openingLines = [
-        "Надо же, говорят, старые досье разлетелись. Но ты ведь не суёшь свой любопытный нос туда, куда не хотят, правда?",
-        "Вот и узнаем, кто у нас неоптимизированный элемент.",
-        "О боже, там досье разлетелись! Кто же что узнает? Но про меня-то точно нечего узнавать. Совсем нечего.",
-        "Старые досье разлетелись. Ты смотри, мне не балуй — бумаги и без тебя любят улетать не туда."
-      ];
-      const openingPortraitIsPositive = [true, true, false, false];
       const openingEmployeeIndex = Math.floor(Math.random() * employees.length);
       const igorPensFact = "Ворует ручки компании и перепродаёт их, но зарабатывает слишком мало даже на кофе.";
       const guardPensFact = "Знает про ручки Игоря, но ему совершенно наплевать.";
@@ -780,6 +784,12 @@
           "clip-path": "url(#dialogue-portrait-clip)"
         });
         dialoguePortrait.replaceChildren(definitions, image);
+      }
+
+      function resolvePortraitExpression(expression, automaticPositive) {
+        if (expression === "friendly") return true;
+        if (expression === "annoyed") return false;
+        return automaticPositive;
       }
 
       function renderCleanerDialoguePortrait(positive) {
@@ -2356,9 +2366,10 @@
         splash.hidden = true;
         dialogueScreen.hidden = false;
         dialoguePortrait.style.display = "block";
-        renderDialoguePortrait(employeeIndex, openingPortraitIsPositive[employeeIndex]);
+        const opening = openingDialogues[employeeIndex];
+        renderDialoguePortrait(employeeIndex, resolvePortraitExpression(opening.portrait, true));
         dialogueName.textContent = employees[employeeIndex].name;
-        dialogueText.textContent = openingLines[employeeIndex];
+        dialogueText.textContent = opening.text;
         dialogueActions.replaceChildren();
         const next = document.createElement("button");
         next.className = "dialogue-next";
@@ -2486,13 +2497,17 @@
         if (panel === 7) fadeNovelMusic(0, 450);
         const isCleaner = employeeIndex === "cleaner";
         const isVasek = employeeIndex === "vasek";
-        const positive = isCleaner ? cleanerAffection >= 0 : isVasek ? vasekAffection >= 0 : affection[employeeIndex] >= 0;
+        const automaticPositive = isCleaner ? cleanerAffection >= 0 : isVasek ? vasekAffection >= 0 : affection[employeeIndex] >= 0;
+        const isSecondDialogue = milestone === dialogueMilestones[1];
+        const isFinalDialogue = milestone === dialogueMilestones[2];
+        const dialogueStage = isFinalDialogue ? "final" : isSecondDialogue ? "second" : "first";
+        const portraitSet = isCleaner ? dialoguePortraits.cleaner : isVasek ? dialoguePortraits.vasek : dialoguePortraits[dialogueStage];
+        const portraitDialogueIndex = isCleaner || isVasek ? (isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0) : employeeIndex;
+        const positive = resolvePortraitExpression(portraitSet[portraitDialogueIndex][panel], automaticPositive);
         if (isCleaner) renderCleanerDialoguePortrait(positive);
         else if (isVasek) renderVasekDialoguePortrait(positive);
         else renderDialoguePortrait(employeeIndex, positive);
         dialogueName.textContent = isCleaner ? cleaner.name : isVasek ? vasek.name : employees[employeeIndex].name;
-        const isSecondDialogue = milestone === dialogueMilestones[1];
-        const isFinalDialogue = milestone === dialogueMilestones[2];
         const lines = isCleaner
           ? cleanerDialogueLines[isFinalDialogue ? 2 : isSecondDialogue ? 1 : 0]
           : isVasek

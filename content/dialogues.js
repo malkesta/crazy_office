@@ -58,5 +58,49 @@
         [["Номер заявки. Корабль всё равно будет вне зоны обслуживания.", "Скажи, что это был дрон доставки: у нас и без того слишком много странного."], ["Полиции — номер заявки, шефу — инструкцию по существованию бумаги.", "Пусть принтер сначала научится не есть скрепки, потом обсудим межпланетные технологии."]],
         [["Конечно, обычная сисадминская шутка. Но куртку всё-таки купи.", "Если жильё растёт из грунта, тебе точно нужен ботаник, а не ипотека."], ["Скажи ещё раз — и они решат, что ты просто устал от дедлайнов.", "Отпустят, если пообещаешь не обновлять роутер перед уходом."]]
       ];
-  window.OFFICE_DIALOGUES = { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices, vasekDialogueLines, vasekDialogueChoices };
+
+      // Реплики перед началом игры. Порядок: Лена, шеф, Игорь, Николай.
+      // portrait: "friendly" — верхний (доброжелательный) портрет, "annoyed" — нижний.
+      const openingDialogues = [
+        { text: "Надо же, говорят, старые досье разлетелись. Но ты ведь не суёшь свой любопытный нос туда, куда не хотят, правда?", portrait: "friendly" },
+        { text: "Вот и узнаем, кто у нас неоптимизированный элемент.", portrait: "friendly" },
+        { text: "О боже, там досье разлетелись! Кто же что узнает? Но про меня-то точно нечего узнавать. Совсем нечего.", portrait: "annoyed" },
+        { text: "Старые досье разлетелись. Ты смотри, мне не балуй — бумаги и без тебя любят улетать не туда.", portrait: "annoyed" }
+      ];
+
+      // Портрет каждой реплики. В каждой строке восемь значений — по одному на реплику.
+      // "auto" сохраняет прежнее поведение: выражение зависит от отношения персонажа.
+      // Замените "auto" на "friendly" или "annoyed", чтобы закрепить выражение за репликой.
+      const dialoguePortraits = {
+        first: [
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"]
+        ],
+        second: [
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"]
+        ],
+        final: [
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"]
+        ],
+        cleaner: [
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"]
+        ],
+        vasek: [
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"],
+          ["auto", "auto", "auto", "auto", "auto", "auto", "auto", "auto"]
+        ]
+      };
+
+  window.OFFICE_DIALOGUES = { dialogueLines, secondDialogueLines, firstDialogueChoices, secondDialogueChoices, finalDialogueLines, finalDialogueChoices, cleanerDialogueLines, cleanerDialogueChoices, vasekDialogueLines, vasekDialogueChoices, openingDialogues, dialoguePortraits };
 })();
